@@ -19,10 +19,16 @@ test:
 	pytest -q
 
 run:
-	uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+	uvicorn app.main:app --reload --host 0.0.0.0 --port $${PORT:-8080}
 
 build:
 	docker build -t snap-export-to-google-photos-gcp:local .
 
-deploy:
-	@echo "Use Terraform + Cloud Run deploy workflow"
+bootstrap-local:
+	./scripts/bootstrap_local.sh
+
+tf-plan:
+	./scripts/tf.sh plan
+
+tf-apply:
+	./scripts/tf.sh apply

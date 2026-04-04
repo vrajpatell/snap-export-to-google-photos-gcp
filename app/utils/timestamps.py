@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.models.job import TimestampSource
@@ -21,11 +21,13 @@ def parse_export_metadata_time(metadata_dir: Path, filename: str) -> datetime | 
     return None
 
 
-def infer_timestamp(path: Path, metadata_dir: Path | None = None) -> tuple[datetime, TimestampSource]:
+def infer_timestamp(
+    path: Path, metadata_dir: Path | None = None
+) -> tuple[datetime, TimestampSource]:
     if metadata_dir:
         by_export = parse_export_metadata_time(metadata_dir, path.name)
         if by_export:
             return by_export, "export_metadata"
-    # EXIF parsing is intentionally omitted to keep dependencies light; could be added via pillow/exifread.
+    # EXIF parsing intentionally omitted to keep dependencies light.
     stat = path.stat()
-    return datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc), "file_mtime"
+    return datetime.fromtimestamp(stat.st_mtime, tz=UTC), "file_mtime"

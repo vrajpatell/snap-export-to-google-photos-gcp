@@ -8,7 +8,9 @@ from app.utils.timestamps import infer_timestamp
 
 
 def test_timestamp_prefers_export_metadata(sample_export: Path) -> None:
-    ts, source = infer_timestamp(sample_export / "memories" / "snap1.jpg", metadata_dir=sample_export / "metadata")
+    ts, source = infer_timestamp(
+        sample_export / "memories" / "snap1.jpg", metadata_dir=sample_export / "metadata"
+    )
     assert source == "export_metadata"
     assert ts.year == 2021
 

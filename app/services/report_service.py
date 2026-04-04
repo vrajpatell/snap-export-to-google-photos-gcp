@@ -24,7 +24,7 @@ class ReportService:
             "counters": job.counters.model_dump(),
             "files": [record.model_dump() for record in records],
         }
-        rows = [asdict(self._csv_row(record)) for record in records]
+        rows = [asdict(self.CsvRow(record)) for record in records]
         json_path = self.output_dir / f"{job.job_id}-report.json"
         csv_path = self.output_dir / f"{job.job_id}-report.csv"
         write_json(json_path, payload)
@@ -32,7 +32,7 @@ class ReportService:
         return ReportPaths(json_path=str(json_path), csv_path=str(csv_path))
 
     @dataclass
-    class _csv_row:
+    class CsvRow:
         source_path: str
         status: str
         error_reason: str | None

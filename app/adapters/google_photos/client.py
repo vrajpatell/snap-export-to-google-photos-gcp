@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Callable
+from datetime import UTC, datetime
 
 import httpx
 
@@ -34,7 +34,12 @@ class GooglePhotosClient:
             "X-Goog-Upload-Protocol": "raw",
             "X-Goog-Upload-File-Name": filename,
         }
-        response = httpx.post("https://photoslibrary.googleapis.com/v1/uploads", headers=headers, content=content, timeout=60)
+        response = httpx.post(
+            "https://photoslibrary.googleapis.com/v1/uploads",
+            headers=headers,
+            content=content,
+            timeout=60,
+        )
         response.raise_for_status()
         return response.text
 
@@ -60,4 +65,4 @@ class GooglePhotosClient:
         if status.get("code", 0) not in (0, None):
             raise GooglePhotosError(status.get("message", "Unknown Google Photos error"))
         media_item_id = item["mediaItem"]["id"]
-        return UploadResult(media_item_id=media_item_id, uploaded_at=datetime.now(timezone.utc))
+        return UploadResult(media_item_id=media_item_id, uploaded_at=datetime.now(UTC))

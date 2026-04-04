@@ -3,13 +3,26 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from app.core.container import import_service, job_repo, manifest_repo, oauth_service, report_service
+from app.config.settings import settings
+from app.core.container import (
+    import_service,
+    job_repo,
+    manifest_repo,
+    oauth_service,
+    report_service,
+    task_service,
+)
 from app.models.job import ImportJobCreate, JobActionResponse
 
 router = APIRouter()
+
+
+class ProcessTaskRequest(BaseModel):
+    job_id: str
 
 
 @router.post("/auth/google/start")
@@ -35,7 +48,7 @@ async def create_import(
     album_strategy: str = "year_month",
     local_folder_path: str | None = None,
     staged_path: str | None = None,
-    upload: UploadFile | None = File(default=None),
+    upload: UploadFile | None = None,
 ) -> dict[str, str]:
     upload_path: Path | None = None
     if upload:
@@ -64,7 +77,10 @@ async def create_import(
 
 @router.get("/imports")
 def list_imports() -> list[dict[str, str]]:
-    return [{"job_id": j.job_id, "status": j.status.value, "source_uri": j.source_uri} for j in job_repo.list()]
+    return [
+        {"job_id": j.job_id, "status": j.status.value, "source_uri": j.source_uri}
+        for j in job_repo.list()
+    ]
 
 
 @router.get("/imports/{job_id}")
@@ -77,8 +93,22 @@ def get_import(job_id: str) -> dict[str, object]:
 
 @router.post("/imports/{job_id}/start", response_model=JobActionResponse)
 def start_import(job_id: str) -> JobActionResponse:
+    if task_service:
+        task_service.enqueue_process_job(job_id)
+        job = import_service.mark_uploading(job_id)
+        return JobActionResponse(job_id=job.job_id, status=job.status, message="task enqueued")
     job = import_service.start_upload(job_id)
     return JobActionResponse(job_id=job.job_id, status=job.status, message="start invoked")
+
+
+@router.post("/tasks/process")
+def process_import_task(
+    payload: ProcessTaskRequest, x_task_token: str | None = Header(default=None)
+) -> dict[str, str]:
+    if settings.use_gcp_backends and x_task_token != settings.cloud_tasks_task_token:
+        raise HTTPException(status_code=401, detail="invalid task token")
+    job = import_service.start_upload(payload.job_id)
+    return {"job_id": job.job_id, "status": job.status.value}
 
 
 @router.post("/imports/{job_id}/pause", response_model=JobActionResponse)
@@ -89,6 +119,10 @@ def pause_import(job_id: str) -> JobActionResponse:
 
 @router.post("/imports/{job_id}/resume", response_model=JobActionResponse)
 def resume_import(job_id: str) -> JobActionResponse:
+    if task_service:
+        task_service.enqueue_process_job(job_id)
+        job = import_service.mark_uploading(job_id)
+        return JobActionResponse(job_id=job.job_id, status=job.status, message="resume enqueued")
     job = import_service.resume(job_id)
     return JobActionResponse(job_id=job.job_id, status=job.status, message="resume requested")
 
@@ -119,9 +153,3 @@ def healthz() -> dict[str, str]:
 @router.get("/readyz")
 def readyz() -> dict[str, str]:
     return {"status": "ready"}
-
-
-@router.get("/metrics")
-def metrics() -> dict[str, int]:
-    jobs = job_repo.list()
-    return {"jobs_total": len(jobs), "jobs_completed": sum(1 for j in jobs if j.status.value == "completed")}

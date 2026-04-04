@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.adapters.google_photos.client import GooglePhotosClient
@@ -70,7 +70,7 @@ class ImportService:
                         mime_type=mime,
                         size_bytes=size,
                         sha256="",
-                        timestamp_iso=ts.astimezone(timezone.utc).isoformat(),
+                        timestamp_iso=ts.astimezone(UTC).isoformat(),
                         timestamp_source=ts_source,
                         status=FileStatus.UNSUPPORTED,
                         error_reason="unsupported_extension",
@@ -85,7 +85,7 @@ class ImportService:
                     mime_type=mime,
                     size_bytes=size,
                     sha256=compute_sha256(path),
-                    timestamp_iso=ts.astimezone(timezone.utc).isoformat(),
+                    timestamp_iso=ts.astimezone(UTC).isoformat(),
                     timestamp_source=ts_source,
                     status=FileStatus.PENDING,
                 )
@@ -93,7 +93,9 @@ class ImportService:
 
         job.counters.total_discovered = len(records)
         job.counters.supported_files = sum(1 for r in records if r.status != FileStatus.UNSUPPORTED)
-        job.counters.unsupported_count = sum(1 for r in records if r.status == FileStatus.UNSUPPORTED)
+        job.counters.unsupported_count = sum(
+            1 for r in records if r.status == FileStatus.UNSUPPORTED
+        )
         self.manifests.save_records(job_id, records)
         job.status = JobStatus.READY
         self._touch(job)
@@ -123,10 +125,14 @@ class ImportService:
             try:
                 file_bytes = Path(record.source_path).read_bytes()
                 upload_token = self.photos_client.upload_bytes(file_bytes, record.original_filename)
-                upload = self.photos_client.create_media_item(upload_token, description="Snapchat import")
+                upload = self.photos_client.create_media_item(
+                    upload_token, description="Snapchat import"
+                )
                 record.media_item_id = upload.media_item_id
                 record.status = FileStatus.UPLOADED
-                record.album_assigned = self._album_name(job.album_strategy, record.timestamp_iso, job.job_id)
+                record.album_assigned = self._album_name(
+                    job.album_strategy, record.timestamp_iso, job.job_id
+                )
                 self.dedupe.put(dedupe_key, upload.media_item_id)
                 job.counters.uploaded_count += 1
                 job.counters.bytes_processed += record.size_bytes
@@ -139,7 +145,17 @@ class ImportService:
         if job.status == JobStatus.PAUSED:
             self._touch(job)
             return job
-        job.status = JobStatus.PARTIALLY_COMPLETED if job.counters.failed_count else JobStatus.COMPLETED
+        job.status = (
+            JobStatus.PARTIALLY_COMPLETED if job.counters.failed_count else JobStatus.COMPLETED
+        )
+        self._touch(job)
+        return job
+
+    def mark_uploading(self, job_id: str) -> ImportJob:
+        job = self._get_job(job_id)
+        if job.status in (JobStatus.CANCELLED, JobStatus.COMPLETED):
+            return job
+        job.status = JobStatus.UPLOADING
         self._touch(job)
         return job
 
@@ -150,9 +166,7 @@ class ImportService:
         return job
 
     def resume(self, job_id: str) -> ImportJob:
-        job = self._get_job(job_id)
-        job.status = JobStatus.UPLOADING
-        self._touch(job)
+        self.mark_uploading(job_id)
         return self.start_upload(job_id)
 
     def cancel(self, job_id: str) -> ImportJob:
@@ -184,5 +198,5 @@ class ImportService:
         return job
 
     def _touch(self, job: ImportJob) -> None:
-        job.updated_at = datetime.now(timezone.utc)
+        job.updated_at = datetime.now(UTC)
         self.jobs.update(job)

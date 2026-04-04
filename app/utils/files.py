@@ -29,7 +29,10 @@ def safe_extract_zip(source_zip: Path, destination_dir: Path) -> list[Path]:
     with zipfile.ZipFile(source_zip) as archive:
         for member in archive.infolist():
             target_path = (destination_dir / member.filename).resolve()
-            if destination_dir.resolve() not in target_path.parents and target_path != destination_dir.resolve():
+            if (
+                destination_dir.resolve() not in target_path.parents
+                and target_path != destination_dir.resolve()
+            ):
                 raise ZipSlipError(f"Unsafe ZIP entry detected: {member.filename}")
             archive.extract(member, destination_dir)
             if not member.is_dir():

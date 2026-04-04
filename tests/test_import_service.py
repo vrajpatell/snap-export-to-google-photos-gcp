@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from app.adapters.db.in_memory import InMemoryDedupeRepository, InMemoryJobRepository, InMemoryManifestRepository
+from app.adapters.db.in_memory import (
+    InMemoryDedupeRepository,
+    InMemoryJobRepository,
+    InMemoryManifestRepository,
+)
 from app.adapters.google_photos.client import UploadResult
 from app.models.job import ImportJobCreate
 from app.services.import_service import ImportService
@@ -14,7 +18,7 @@ class FakePhotosClient:
         return f"token-{filename}-{len(content)}"
 
     def create_media_item(self, upload_token: str, description: str = "") -> UploadResult:
-        return UploadResult(media_item_id=f"id-{upload_token}", uploaded_at=datetime.now(timezone.utc))
+        return UploadResult(media_item_id=f"id-{upload_token}", uploaded_at=datetime.now(UTC))
 
 
 def test_resume_behavior(sample_export: Path, tmp_path: Path) -> None:

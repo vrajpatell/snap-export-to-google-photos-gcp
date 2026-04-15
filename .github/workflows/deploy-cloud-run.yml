@@ -7,12 +7,19 @@ on:
       - 'app/**'
       - 'Dockerfile'
       - 'pyproject.toml'
+      - '.github/workflows/deploy-cloud-run.yml'
 permissions:
   contents: read
   id-token: write
+concurrency:
+  group: deploy-cloud-run-main
+  cancel-in-progress: true
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      API_SERVICE: snap-import-api
+      WORKER_SERVICE: snap-import-worker
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
@@ -20,13 +27,30 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
       - run: |
           IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REPO }}/app:${{ github.sha }}"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-          gcloud run deploy "${{ secrets.CLOUD_RUN_SERVICE }}" \
+          gcloud builds submit --project "${{ secrets.GCP_PROJECT_ID }}" --tag "$IMAGE" .
+
+          gcloud run deploy "${WORKER_SERVICE}" \
             --image "$IMAGE" \
             --region "${{ secrets.GCP_REGION }}" \
             --service-account "${{ secrets.CLOUD_RUN_RUNTIME_SA }}" \
-            --set-env-vars "USE_GCP_BACKENDS=true,GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCP_REGION=${{ secrets.GCP_REGION }}"
+            --ingress internal \
+            --set-env-vars "USE_GCP_BACKENDS=true,GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCP_REGION=${{ secrets.GCP_REGION }}" \
+            --set-secrets "CLOUD_TASKS_TASK_TOKEN=cloud-tasks-shared-token:latest,GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest"
+
+          WORKER_URL="$(gcloud run services describe "${WORKER_SERVICE}" --region "${{ secrets.GCP_REGION }}" --format='value(status.url)')"
+
+          gcloud run deploy "${API_SERVICE}" \
+            --image "$IMAGE" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --allow-unauthenticated \
+            --service-account "${{ secrets.CLOUD_RUN_RUNTIME_SA }}" \
+            --set-env-vars "USE_GCP_BACKENDS=true,GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCP_REGION=${{ secrets.GCP_REGION }},GCS_STAGING_BUCKET=${{ secrets.GCS_STAGING_BUCKET }},FIRESTORE_DATABASE=(default),CLOUD_TASKS_QUEUE=snap-import-queue,CLOUD_TASKS_WORKER_URL=${WORKER_URL}/tasks/process,CLOUD_TASKS_WORKER_AUDIENCE=${WORKER_URL},CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL=${{ secrets.CLOUD_RUN_RUNTIME_SA }}" \
+            --set-secrets "CLOUD_TASKS_TASK_TOKEN=cloud-tasks-shared-token:latest,GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest"
+
+          API_URL="$(gcloud run services describe "${API_SERVICE}" --region "${{ secrets.GCP_REGION }}" --format='value(status.url)')"
+
+          gcloud run services update "${API_SERVICE}" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --update-env-vars "APP_BASE_URL=${API_URL},GOOGLE_OAUTH_REDIRECT_URI=${API_URL}/auth/google/callback"

@@ -5,3 +5,5 @@ output "bucket_name" { value = google_storage_bucket.staging.name }
 output "queue_name" { value = google_cloud_tasks_queue.imports.name }
 output "runtime_service_account_email" { value = google_service_account.runtime.email }
 output "deployer_service_account_email" { value = google_service_account.deployer.email }
+output "monitoring_dashboard_id" { value = google_monitoring_dashboard.snap_import_overview.id }
+output "uptime_check_id" { value = google_monitoring_uptime_check_config.api_readyz.uptime_check_id }

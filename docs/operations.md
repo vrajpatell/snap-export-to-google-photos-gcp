@@ -14,3 +14,8 @@
 - Keep min instances at 0.
 - Use one small Cloud Run revision (CPU 1, memory 512Mi where possible).
 - Keep bucket lifecycle rules to delete staging artifacts after import.
+
+## Observability checks
+- Dashboard: `Snap Import Overview` in Cloud Monitoring.
+- Uptime check target: API `/readyz`.
+- Alerts: API uptime failures and API 5xx responses.

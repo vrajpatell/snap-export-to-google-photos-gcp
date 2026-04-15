@@ -26,6 +26,7 @@ make run
 - `docs/deployment-gcp.md`
 - `docs/oauth-google-photos.md`
 - `docs/operations.md`
+- `docs/observability-gcp.md`
 
 ## Curl examples
 ```bash

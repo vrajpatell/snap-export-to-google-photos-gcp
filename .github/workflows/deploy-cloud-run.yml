@@ -28,9 +28,32 @@ jobs:
           service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
       - run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ] || [ -z "${{ secrets.GCP_REGION }}" ]; then
+            echo "Missing required GCP secrets"
+            exit 1
+          fi
+
           IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REPO }}/app:${{ github.sha }}"
-          BUILD_ID="$(gcloud builds submit --project "${{ secrets.GCP_PROJECT_ID }}" --tag "$IMAGE" --async --format='value(metadata.build.id)' .)"
-          echo "Triggered Cloud Build: ${BUILD_ID}"
+          OPERATION="$(gcloud builds submit --project "${{ secrets.GCP_PROJECT_ID }}" --tag "$IMAGE" --async --format='value(name)' .)"
+          echo "Triggered Cloud Build operation: ${OPERATION}"
+
+          BUILD_ID=""
+          for i in {1..6}; do
+            BUILD_ID="$(gcloud builds operations describe "${OPERATION}" --project "${{ secrets.GCP_PROJECT_ID }}" --format='value(metadata.build.id)' 2>/dev/null || true)"
+            if [ -n "$BUILD_ID" ]; then
+              break
+            fi
+            echo "Waiting for build id to be available..."
+            sleep 5
+          done
+
+          if [ -z "$BUILD_ID" ]; then
+            echo "Failed to determine Cloud Build id from operation ${OPERATION}"
+            exit 1
+          fi
+
+          echo "Resolved Cloud Build id: ${BUILD_ID}"
           while true; do
             BUILD_STATUS="$(gcloud builds describe "${BUILD_ID}" --project "${{ secrets.GCP_PROJECT_ID }}" --format='value(status)')"
             echo "Cloud Build status: ${BUILD_STATUS}"

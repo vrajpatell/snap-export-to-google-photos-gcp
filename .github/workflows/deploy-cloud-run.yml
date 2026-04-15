@@ -29,7 +29,22 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - run: |
           IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REPO }}/app:${{ github.sha }}"
-          gcloud builds submit --project "${{ secrets.GCP_PROJECT_ID }}" --tag "$IMAGE" .
+          BUILD_ID="$(gcloud builds submit --project "${{ secrets.GCP_PROJECT_ID }}" --tag "$IMAGE" --async --format='value(metadata.build.id)' .)"
+          echo "Triggered Cloud Build: ${BUILD_ID}"
+          while true; do
+            BUILD_STATUS="$(gcloud builds describe "${BUILD_ID}" --project "${{ secrets.GCP_PROJECT_ID }}" --format='value(status)')"
+            echo "Cloud Build status: ${BUILD_STATUS}"
+            case "${BUILD_STATUS}" in
+              SUCCESS)
+                break
+                ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                echo "Cloud Build failed with status ${BUILD_STATUS}"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
 
           gcloud run deploy "${WORKER_SERVICE}" \
             --image "$IMAGE" \

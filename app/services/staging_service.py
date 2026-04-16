@@ -131,7 +131,7 @@ class StagingService:
 
     @staticmethod
     def validate_upload(content_type: str, size_bytes: int) -> None:
-        if content_type not in settings.staging_allowed_content_types:
+        if content_type not in settings.staging_allowed_content_types_list:
             raise ValueError("content type is not allowed")
         if size_bytes <= 0:
             raise ValueError("file size must be greater than zero")

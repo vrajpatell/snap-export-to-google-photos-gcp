@@ -35,7 +35,7 @@ class OAuthService:
             "client_id": settings.google_oauth_client_id,
             "redirect_uri": settings.google_oauth_redirect_uri,
             "response_type": "code",
-            "scope": " ".join(settings.photos_oauth_scopes),
+            "scope": " ".join(settings.photos_oauth_scopes_list),
             "access_type": "offline",
             "prompt": "consent",
             "state": state,

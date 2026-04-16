@@ -21,8 +21,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         origin = request.headers.get("origin")
         if (
             origin
-            and settings.frontend_allowed_origins
-            and origin not in settings.frontend_allowed_origins
+            and settings.frontend_allowed_origins_list
+            and origin not in settings.frontend_allowed_origins_list
             and request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}
         ):
             return JSONResponse(status_code=403, content={"detail": "origin is not allowed"})

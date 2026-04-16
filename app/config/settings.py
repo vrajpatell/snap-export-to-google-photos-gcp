@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,48 +31,45 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     google_oauth_redirect_uri: str = "http://localhost:8080/auth/google/callback"
-    photos_oauth_scopes: tuple[str, ...] = (
-        "https://www.googleapis.com/auth/photoslibrary.appendonly",
-        "openid",
-        "email",
+    photos_oauth_scopes: str = (
+        "https://www.googleapis.com/auth/photoslibrary.appendonly,openid,email"
     )
 
     oauth_token_secret_id: str = "google-oauth-refresh-token"
     use_gcp_backends: bool = False
     frontend_base_url: str = "http://localhost:5173"
-    frontend_allowed_origins: tuple[str, ...] = ("http://localhost:5173",)
+    frontend_allowed_origins: str = "http://localhost:5173"
     enforce_user_auth: bool = False
-    allowed_user_emails: tuple[str, ...] = ()
+    allowed_user_emails: str = ""
     app_session_secret: str = ""
     app_session_ttl_seconds: int = 43200
     staging_signed_url_ttl_seconds: int = 900
-    staging_allowed_content_types: tuple[str, ...] = (
-        "application/zip",
-        "application/x-zip-compressed",
-        "application/octet-stream",
+    staging_allowed_content_types: str = (
+        "application/zip,application/x-zip-compressed,application/octet-stream"
     )
 
-    @field_validator(
-        "photos_oauth_scopes",
-        "frontend_allowed_origins",
-        "allowed_user_emails",
-        "staging_allowed_content_types",
-        mode="before",
-    )
-    @classmethod
-    def parse_sequence_env(cls, value: object) -> object:
-        if value is None or isinstance(value, tuple | list):
-            return value
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return ()
-            if stripped.startswith("["):
-                parsed = json.loads(stripped)
-                if isinstance(parsed, list):
-                    return tuple(str(item).strip() for item in parsed if str(item).strip())
-            return tuple(part.strip() for part in stripped.split(",") if part.strip())
-        return value
+    @staticmethod
+    def _split_csv(value: str) -> tuple[str, ...]:
+        stripped = (value or "").strip()
+        if not stripped:
+            return ()
+        return tuple(part.strip() for part in stripped.split(",") if part.strip())
+
+    @property
+    def photos_oauth_scopes_list(self) -> tuple[str, ...]:
+        return self._split_csv(self.photos_oauth_scopes)
+
+    @property
+    def frontend_allowed_origins_list(self) -> tuple[str, ...]:
+        return self._split_csv(self.frontend_allowed_origins)
+
+    @property
+    def allowed_user_emails_list(self) -> tuple[str, ...]:
+        return self._split_csv(self.allowed_user_emails)
+
+    @property
+    def staging_allowed_content_types_list(self) -> tuple[str, ...]:
+        return self._split_csv(self.staging_allowed_content_types)
 
 
 settings = Settings()

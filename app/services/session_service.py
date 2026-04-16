@@ -66,9 +66,9 @@ class SessionService:
             raise ValueError("app session secret is not configured")
 
     def _ensure_allowed_email(self, email: str) -> None:
-        if not settings.allowed_user_emails:
+        if not settings.allowed_user_emails_list:
             return
-        normalized = {value.lower() for value in settings.allowed_user_emails}
+        normalized = {value.lower() for value in settings.allowed_user_emails_list}
         if email.lower() not in normalized:
             raise ValueError("signed-in email is not allowed")
 

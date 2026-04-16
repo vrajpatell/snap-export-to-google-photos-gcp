@@ -11,10 +11,10 @@ from app.utils.logging import configure_logging
 configure_logging()
 app = FastAPI(title=settings.app_name)
 app.add_middleware(RequestContextMiddleware)
-if settings.frontend_allowed_origins:
+if settings.frontend_allowed_origins_list:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(settings.frontend_allowed_origins),
+        allow_origins=list(settings.frontend_allowed_origins_list),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Requested-With"],

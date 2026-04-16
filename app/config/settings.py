@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,6 +54,28 @@ class Settings(BaseSettings):
         "application/x-zip-compressed",
         "application/octet-stream",
     )
+
+    @field_validator(
+        "photos_oauth_scopes",
+        "frontend_allowed_origins",
+        "allowed_user_emails",
+        "staging_allowed_content_types",
+        mode="before",
+    )
+    @classmethod
+    def parse_sequence_env(cls, value: object) -> object:
+        if value is None or isinstance(value, tuple | list):
+            return value
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return ()
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return tuple(str(item).strip() for item in parsed if str(item).strip())
+            return tuple(part.strip() for part in stripped.split(",") if part.strip())
+        return value
 
 
 settings = Settings()

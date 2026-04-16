@@ -1,0 +1,43 @@
+name: update-lockfile
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - ".github/workflows/update-lockfile.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-tools
+        run: python -m pip install --upgrade pip pip-tools
+
+      - name: Regenerate lockfile
+        run: pip-compile pyproject.toml -o requirements.lock
+
+      - name: Verify PR lockfile is current
+        if: github.event_name == 'pull_request'
+        run: git diff --exit-code requirements.lock
+
+      - name: Create lockfile update PR
+        if: github.event_name == 'workflow_dispatch'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: update requirements lockfile"
+          title: "chore: update requirements lockfile"
+          body: |
+            Regenerated `requirements.lock` from `pyproject.toml` using `pip-compile`.
+          branch: chore/update-requirements-lockfile
+          delete-branch: true

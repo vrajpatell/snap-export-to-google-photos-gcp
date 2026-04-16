@@ -28,6 +28,12 @@ cp .env.example .env
 make run
 ```
 
+Dependency lock maintenance:
+```bash
+python -m pip install pip-tools
+pip-compile pyproject.toml -o requirements.lock
+```
+
 Frontend:
 ```bash
 cd frontend

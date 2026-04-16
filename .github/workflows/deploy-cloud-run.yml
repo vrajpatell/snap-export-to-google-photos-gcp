@@ -7,6 +7,7 @@ on:
       - 'app/**'
       - 'Dockerfile'
       - 'pyproject.toml'
+      - 'requirements.lock'
       - '.github/workflows/deploy-cloud-run.yml'
 permissions:
   contents: read

@@ -107,7 +107,7 @@ def auth_google_start(
     return {"authorization_url": start.authorization_url, "state": start.state}
 
 
-@router.get("/auth/google/callback")
+@router.get("/auth/google/callback", response_model=None)
 def auth_google_callback(code: str, state: str) -> dict[str, str] | HTMLResponse:
     try:
         flow = oauth_service.callback_flow(state)

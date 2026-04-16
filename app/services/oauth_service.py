@@ -7,6 +7,7 @@ import httpx
 from google.cloud import secretmanager
 
 from app.config.settings import settings
+from app.utils.signed_tokens import SignedTokenService
 
 
 @dataclass
@@ -17,11 +18,19 @@ class OAuthStart:
 
 class OAuthService:
     def __init__(self) -> None:
-        self._state: str | None = None
+        self._tokens: SignedTokenService | None = None
 
-    def start(self) -> OAuthStart:
-        state = secrets.token_urlsafe(24)
-        self._state = state
+    def start(self, requested_by: str | None = None, flow: str = "api") -> OAuthStart:
+        nonce = secrets.token_urlsafe(18)
+        state = self._token_service().sign(
+            {
+                "type": "oauth_state",
+                "nonce": nonce,
+                "requested_by": requested_by.lower() if requested_by else "",
+                "flow": flow,
+            },
+            ttl_seconds=600,
+        )
         params = {
             "client_id": settings.google_oauth_client_id,
             "redirect_uri": settings.google_oauth_redirect_uri,
@@ -39,7 +48,8 @@ class OAuthService:
         )
 
     def exchange_code(self, code: str, state: str) -> str:
-        if self._state != state:
+        payload = self._token_service().verify(state)
+        if payload.get("type") != "oauth_state":
             raise ValueError("invalid oauth state")
         if not settings.google_oauth_client_id or not settings.google_oauth_client_secret:
             raise ValueError("google oauth client is not configured")
@@ -61,6 +71,13 @@ class OAuthService:
             raise ValueError("oauth token response did not include a refresh token")
         self._store_refresh_token(refresh_token)
         return f"secret:{settings.oauth_token_secret_id}"
+
+    def callback_flow(self, state: str) -> str:
+        payload = self._token_service().verify(state)
+        if payload.get("type") != "oauth_state":
+            raise ValueError("invalid oauth state")
+        flow = str(payload.get("flow", "api"))
+        return flow if flow in {"api", "web"} else "api"
 
     def access_token(self) -> str:
         refresh_token = self._load_refresh_token()
@@ -99,3 +116,8 @@ class OAuthService:
         )
         response = client.access_secret_version(name=name)
         return response.payload.data.decode("utf-8")
+
+    def _token_service(self) -> SignedTokenService:
+        if not self._tokens:
+            self._tokens = SignedTokenService(settings.app_session_secret)
+        return self._tokens

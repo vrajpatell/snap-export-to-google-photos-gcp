@@ -6,7 +6,9 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$GoogleOAuthClientSecret = $env:GOOGLE_OAUTH_CLIENT_SECRET,
     [Parameter(Mandatory = $false)]
-    [string]$CloudTasksTaskToken = $env:CLOUD_TASKS_TASK_TOKEN
+    [string]$CloudTasksTaskToken = $env:CLOUD_TASKS_TASK_TOKEN,
+    [Parameter(Mandatory = $false)]
+    [string]$AppSessionSecret = $env:APP_SESSION_SECRET
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,6 +22,12 @@ if (-not $CloudTasksTaskToken) {
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($randomBytes)
     $CloudTasksTaskToken = [Convert]::ToBase64String($randomBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
     Write-Host "Generated CLOUD_TASKS_TASK_TOKEN automatically."
+}
+if (-not $AppSessionSecret) {
+    $randomBytes = New-Object byte[] 64
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($randomBytes)
+    $AppSessionSecret = [Convert]::ToBase64String($randomBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    Write-Host "Generated APP_SESSION_SECRET automatically."
 }
 
 function Add-SecretVersion {
@@ -48,10 +56,12 @@ function Add-SecretVersion {
 Add-SecretVersion -SecretName "google-oauth-client-id" -SecretValue $GoogleOAuthClientId
 Add-SecretVersion -SecretName "google-oauth-client-secret" -SecretValue $GoogleOAuthClientSecret
 Add-SecretVersion -SecretName "cloud-tasks-shared-token" -SecretValue $CloudTasksTaskToken
+Add-SecretVersion -SecretName "app-session-secret" -SecretValue $AppSessionSecret
 
 Write-Host "Secrets configured:"
 Write-Host "  - google-oauth-client-id"
 Write-Host "  - google-oauth-client-secret"
 Write-Host "  - cloud-tasks-shared-token"
+Write-Host "  - app-session-secret"
 Write-Host "Cloud Tasks token:"
 Write-Host "  $CloudTasksTaskToken"

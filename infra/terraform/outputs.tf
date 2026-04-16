@@ -1,5 +1,6 @@
 output "api_url" { value = google_cloud_run_v2_service.api.uri }
 output "worker_url" { value = google_cloud_run_v2_service.worker.uri }
+output "frontend_url" { value = google_cloud_run_v2_service.frontend.uri }
 output "artifact_registry_repo" { value = google_artifact_registry_repository.repo.name }
 output "bucket_name" { value = google_storage_bucket.staging.name }
 output "queue_name" { value = google_cloud_tasks_queue.imports.name }

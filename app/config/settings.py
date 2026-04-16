@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8080
     max_upload_size_mb: int = 512
+    max_staged_upload_size_mb: int = 20480
 
     gcp_project_id: str = ""
     gcp_region: str = "us-central1"
@@ -38,6 +39,18 @@ class Settings(BaseSettings):
 
     oauth_token_secret_id: str = "google-oauth-refresh-token"
     use_gcp_backends: bool = False
+    frontend_base_url: str = "http://localhost:5173"
+    frontend_allowed_origins: tuple[str, ...] = ("http://localhost:5173",)
+    enforce_user_auth: bool = False
+    allowed_user_emails: tuple[str, ...] = ()
+    app_session_secret: str = ""
+    app_session_ttl_seconds: int = 43200
+    staging_signed_url_ttl_seconds: int = 900
+    staging_allowed_content_types: tuple[str, ...] = (
+        "application/zip",
+        "application/x-zip-compressed",
+        "application/octet-stream",
+    )
 
 
 settings = Settings()

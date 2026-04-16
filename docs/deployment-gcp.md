@@ -11,11 +11,17 @@ scripts/tf.sh plan
 scripts/tf.sh apply
 ```
 
+`terraform.tfvars` now also requires:
+- `frontend_image`
+- `frontend_service_name`
+- `allowed_user_emails` (recommended for app access control)
+
 ## Seed required secrets before first deploy
 ```bash
 export GCP_PROJECT_ID=encoded-source-492312-b0
 export GOOGLE_OAUTH_CLIENT_ID="<your-client-id>.apps.googleusercontent.com"
 export GOOGLE_OAUTH_CLIENT_SECRET="<your-client-secret>"
+export APP_SESSION_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
 # optional: set your own token instead of auto-generated one
 # export CLOUD_TASKS_TASK_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
 
@@ -27,6 +33,7 @@ PowerShell equivalent:
 $env:GCP_PROJECT_ID="encoded-source-492312-b0"
 $env:GOOGLE_OAUTH_CLIENT_ID="<your-client-id>.apps.googleusercontent.com"
 $env:GOOGLE_OAUTH_CLIENT_SECRET="<your-client-secret>"
+$env:APP_SESSION_SECRET="<long-random-secret>"
 .\scripts\set-gcp-secrets.ps1
 ```
 
@@ -64,3 +71,25 @@ Pipeline behavior on push to `main`:
 2. Deploy worker Cloud Run service.
 3. Deploy API Cloud Run service with Cloud Tasks and GCS env vars.
 4. Update API base/redirect URLs to the actual Cloud Run URL.
+
+## Redirect and frontend URL wiring
+- OAuth redirect URI in Google Cloud Console must match API callback URL:
+  - `https://<api-service-url>/auth/google/callback`
+- API runtime env should expose:
+  - `FRONTEND_BASE_URL=https://<frontend-service-url>`
+  - `FRONTEND_ALLOWED_ORIGINS=https://<frontend-service-url>`
+
+## Frontend image and deploy
+Build frontend image with compile-time API URL and Google client id:
+```bash
+docker build \
+  -f frontend/Dockerfile \
+  --build-arg VITE_API_BASE_URL="https://<api-url>" \
+  --build-arg VITE_GOOGLE_CLIENT_ID="<client-id>.apps.googleusercontent.com" \
+  -t us-central1-docker.pkg.dev/$GCP_PROJECT_ID/snap-import/frontend:latest \
+  frontend
+
+docker push us-central1-docker.pkg.dev/$GCP_PROJECT_ID/snap-import/frontend:latest
+```
+
+Set `frontend_image` in `infra/terraform/terraform.tfvars`, then apply Terraform.

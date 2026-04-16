@@ -22,6 +22,11 @@ variable "worker_service_name" {
   default = "snap-import-worker"
 }
 
+variable "frontend_service_name" {
+  type    = string
+  default = "snap-import-frontend"
+}
+
 variable "bucket_name" {
   type = string
 }
@@ -43,6 +48,15 @@ variable "firestore_location" {
 
 variable "container_image" {
   type = string
+}
+
+variable "frontend_image" {
+  type = string
+}
+
+variable "allowed_user_emails" {
+  type    = list(string)
+  default = []
 }
 
 variable "alert_notification_email" {

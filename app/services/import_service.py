@@ -7,6 +7,7 @@ from app.adapters.google_photos.client import GooglePhotosClient
 from app.domain.enums import FileStatus, JobStatus
 from app.domain.interfaces import DedupeRepository, JobRepository, ManifestRepository
 from app.models.job import ImportFileRecord, ImportJob, ImportJobCreate
+from app.services.staging_service import StagingService
 from app.utils.files import compute_sha256, discover_files, safe_extract_zip
 from app.utils.media import detect_mime_type, is_supported_media
 from app.utils.timestamps import infer_timestamp
@@ -20,12 +21,14 @@ class ImportService:
         dedupe: DedupeRepository,
         photos_client: GooglePhotosClient,
         workspace: Path,
+        staging: StagingService | None = None,
     ) -> None:
         self.jobs = jobs
         self.manifests = manifests
         self.dedupe = dedupe
         self.photos_client = photos_client
         self.workspace = workspace
+        self.staging = staging
         self.workspace.mkdir(parents=True, exist_ok=True)
 
     def create_job(self, request: ImportJobCreate, uploaded_zip: Path | None = None) -> ImportJob:
@@ -176,8 +179,15 @@ class ImportService:
         return job
 
     def _materialize_source(self, job: ImportJob) -> Path:
-        if job.source_type in ("folder", "staged"):
+        if job.source_type == "folder":
             return Path(job.source_uri)
+        if job.source_type == "staged":
+            if not self.staging:
+                raise ValueError("staging service is not configured")
+            return self.staging.materialize_staged_source(
+                source_uri=job.source_uri,
+                target_root=self.workspace / job.job_id / "staged",
+            )
         target = self.workspace / job.job_id / "extracted"
         safe_extract_zip(Path(job.source_uri), target)
         return target

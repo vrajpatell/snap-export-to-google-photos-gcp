@@ -87,6 +87,13 @@ resource "google_secret_manager_secret" "task_token" {
   }
 }
 
+resource "google_secret_manager_secret" "app_session_secret" {
+  secret_id = "app-session-secret"
+  replication {
+    auto {}
+  }
+}
+
 resource "google_service_account" "runtime" {
   account_id   = "snap-import-runtime"
   display_name = "Snap Import Runtime SA"
@@ -198,6 +205,22 @@ resource "google_cloud_run_v2_service" "api" {
         value = "https://${var.api_service_name}-${data.google_project.current.number}.${var.region}.run.app"
       }
       env {
+        name  = "FRONTEND_BASE_URL"
+        value = "https://${var.frontend_service_name}-${data.google_project.current.number}.${var.region}.run.app"
+      }
+      env {
+        name  = "FRONTEND_ALLOWED_ORIGINS"
+        value = "https://${var.frontend_service_name}-${data.google_project.current.number}.${var.region}.run.app"
+      }
+      env {
+        name  = "ENFORCE_USER_AUTH"
+        value = "true"
+      }
+      env {
+        name  = "ALLOWED_USER_EMAILS"
+        value = join(",", var.allowed_user_emails)
+      }
+      env {
         name  = "CLOUD_TASKS_QUEUE"
         value = google_cloud_tasks_queue.imports.name
       }
@@ -248,6 +271,15 @@ resource "google_cloud_run_v2_service" "api" {
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.task_token.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "APP_SESSION_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.app_session_secret.secret_id
             version = "latest"
           }
         }
@@ -303,9 +335,29 @@ resource "google_cloud_run_v2_service" "worker" {
           }
         }
       }
+      env {
+        name = "APP_SESSION_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.app_session_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
     }
   }
   ingress = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+}
+
+resource "google_cloud_run_v2_service" "frontend" {
+  name     = var.frontend_service_name
+  location = var.region
+  template {
+    containers {
+      image = var.frontend_image
+    }
+  }
+  ingress = "INGRESS_TRAFFIC_ALL"
 }
 
 resource "google_cloud_run_v2_service_iam_member" "worker_invoker" {
@@ -317,6 +369,13 @@ resource "google_cloud_run_v2_service_iam_member" "worker_invoker" {
 
 resource "google_cloud_run_v2_service_iam_member" "api_public_invoker" {
   name     = google_cloud_run_v2_service.api.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+resource "google_cloud_run_v2_service_iam_member" "frontend_public_invoker" {
+  name     = google_cloud_run_v2_service.frontend.name
   location = var.region
   role     = "roles/run.invoker"
   member   = "allUsers"

@@ -20,6 +20,8 @@ from app.domain.interfaces import DedupeRepository, JobRepository, ManifestRepos
 from app.services.import_service import ImportService
 from app.services.oauth_service import OAuthService
 from app.services.report_service import ReportService
+from app.services.session_service import SessionService
+from app.services.staging_service import StagingService
 from app.services.task_service import TaskService
 
 workspace = Path(".localdata")
@@ -30,7 +32,10 @@ dedupe_repo: DedupeRepository
 task_service: TaskService | None
 
 if settings.use_gcp_backends:
-    fs_client = firestore.Client(project=settings.gcp_project_id, database=settings.firestore_database)
+    fs_client = firestore.Client(
+        project=settings.gcp_project_id,
+        database=settings.firestore_database,
+    )
     job_repo = FirestoreJobRepository(fs_client, settings.firestore_collection_jobs)
     manifest_repo = FirestoreManifestRepository(fs_client, settings.firestore_collection_jobs)
     dedupe_repo = FirestoreDedupeRepository(fs_client, settings.firestore_collection_dedupe)
@@ -51,6 +56,15 @@ else:
     task_service = None
 
 oauth_service = OAuthService()
+session_service = SessionService()
 photos_client = GooglePhotosClient(access_token_provider=oauth_service.access_token)
-import_service = ImportService(job_repo, manifest_repo, dedupe_repo, photos_client, workspace=workspace)
+staging_service = StagingService(workspace=workspace)
+import_service = ImportService(
+    job_repo,
+    manifest_repo,
+    dedupe_repo,
+    photos_client,
+    workspace=workspace,
+    staging=staging_service,
+)
 report_service = ReportService(output_dir=workspace / "reports")

@@ -2,6 +2,12 @@
 
 FastAPI service to import Snapchat export ZIP/folders into Google Photos using official OAuth + Photos Library API.
 
+This repo now includes a lightweight React frontend (`frontend/`) for:
+- app access sign-in (Google Identity, optional but recommended)
+- direct browser upload to GCS staging via signed URL
+- Google Photos OAuth connect flow
+- import start + live progress polling + report links
+
 ## Architecture (simple production)
 - Cloud Run API service
 - Cloud Run worker service (task target)
@@ -22,8 +28,17 @@ cp .env.example .env
 make run
 ```
 
+Frontend:
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
 ## Deployment docs
 - `docs/deployment-gcp.md`
+- `docs/api-frontend.md`
 - `docs/oauth-google-photos.md`
 - `docs/operations.md`
 - `docs/observability-gcp.md`
@@ -35,3 +50,10 @@ curl "$APP_URL/readyz"
 curl -X POST "$APP_URL/imports?local_folder_path=/tmp/snap-export"
 curl -X POST "$APP_URL/imports/<job_id>/start"
 ```
+
+## Browser upload API flow
+1. `POST /staging/upload-url` with `filename`, `content_type`, `size_bytes`
+2. Browser `PUT` to returned signed URL (GCS in production)
+3. `POST /staging/complete` with `object_path` + `size_bytes`
+4. `POST /imports?staged_path=<returned_staged_path>`
+5. `POST /imports/{job_id}/start`, then poll `GET /imports/{job_id}`

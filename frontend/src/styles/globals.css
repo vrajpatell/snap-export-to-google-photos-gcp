@@ -1,0 +1,91 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-family: theme("fontFamily.sans");
+    font-feature-settings: "cv11", "ss01";
+    background: radial-gradient(
+        1200px 600px at 90% -10%,
+        rgb(var(--brand-100) / 0.45),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 500px at -10% 10%,
+        rgb(var(--brand-200) / 0.35),
+        transparent 60%
+      ),
+      rgb(var(--surface-sunken));
+    color: rgb(var(--ink));
+  }
+
+  .dark body {
+    background: radial-gradient(
+        1200px 600px at 90% -10%,
+        rgb(var(--brand-700) / 0.35),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 500px at -10% 10%,
+        rgb(var(--brand-600) / 0.2),
+        transparent 60%
+      ),
+      rgb(var(--surface-sunken));
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(var(--brand-500) / 0.45);
+    border-radius: 10px;
+  }
+
+  ::selection {
+    background: rgb(var(--brand-500) / 0.25);
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply rounded-2xl border border-border bg-surface-raised shadow-card;
+  }
+
+  .stat-tile {
+    @apply rounded-xl border border-border bg-surface p-4 transition-all duration-200 ease-swift;
+  }
+
+  .stat-tile:hover {
+    @apply border-border-strong shadow-soft -translate-y-[1px];
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgb(var(--border) / 0.5) 0%,
+      rgb(var(--border-strong) / 0.7) 50%,
+      rgb(var(--border) / 0.5) 100%
+    );
+    background-size: 800px 100%;
+    @apply animate-shimmer rounded-md;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

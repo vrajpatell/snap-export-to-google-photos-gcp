@@ -1,0 +1,86 @@
+/* Design tokens. All color channels are declared as r g b triples so Tailwind
+   can apply alpha via `rgb(var(--x) / <alpha-value>)`. */
+:root {
+  --brand-50: 238 242 255;
+  --brand-100: 224 231 255;
+  --brand-200: 199 210 254;
+  --brand-400: 129 140 248;
+  --brand-500: 99 102 241;
+  --brand-600: 79 70 229;
+  --brand-700: 67 56 202;
+
+  --surface: 255 255 255;
+  --surface-raised: 255 255 255;
+  --surface-sunken: 247 248 252;
+  --border: 226 232 240;
+  --border-strong: 203 213 225;
+
+  --ink: 15 23 42;
+  --ink-muted: 71 85 105;
+  --ink-subtle: 100 116 139;
+  --ink-inverted: 248 250 252;
+
+  --success: 16 185 129;
+  --success-soft: 209 250 229;
+  --warn: 217 119 6;
+  --warn-soft: 254 243 199;
+  --danger: 225 29 72;
+  --danger-soft: 255 228 230;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --motion-slow: 320ms;
+}
+
+.dark {
+  --brand-50: 49 46 129;
+  --brand-100: 55 48 163;
+  --brand-200: 67 56 202;
+  --brand-400: 129 140 248;
+  --brand-500: 129 140 248;
+  --brand-600: 99 102 241;
+  --brand-700: 79 70 229;
+
+  --surface: 17 24 39;
+  --surface-raised: 22 30 46;
+  --surface-sunken: 11 16 27;
+  --border: 30 41 59;
+  --border-strong: 51 65 85;
+
+  --ink: 241 245 249;
+  --ink-muted: 203 213 225;
+  --ink-subtle: 148 163 184;
+  --ink-inverted: 15 23 42;
+
+  --success: 52 211 153;
+  --success-soft: 6 78 59;
+  --warn: 251 191 36;
+  --warn-soft: 69 39 9;
+  --danger: 251 113 133;
+  --danger-soft: 76 5 25;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -41,9 +41,10 @@ class OAuthService:
             "state": state,
         }
         return OAuthStart(
-            authorization_url=httpx.URL(
-                "https://accounts.google.com/o/oauth2/v2/auth", params=params
-            ).human_repr(),
+            # Use plain string conversion for compatibility across httpx versions.
+            authorization_url=str(
+                httpx.URL("https://accounts.google.com/o/oauth2/v2/auth", params=params)
+            ),
             state=state,
         )
 

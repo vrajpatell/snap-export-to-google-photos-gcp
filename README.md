@@ -63,3 +63,5 @@ curl -X POST "$APP_URL/imports/<job_id>/start"
 3. `POST /staging/complete` with `object_path` + `size_bytes`
 4. `POST /imports?staged_path=<returned_staged_path>`
 5. `POST /imports/{job_id}/start`, then poll `GET /imports/{job_id}`
+
+- TypeScript/Next.js production blueprint: `docs/production-nextjs-typescript-blueprint.md`

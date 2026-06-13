@@ -1,6 +1,6 @@
 import { BlobReader, BlobWriter, ZipReader, type Entry } from "@zip.js/zip.js";
 
-import type { ImportJob, JobStatus } from "../api/types";
+import type { JobResponse, JobStatus } from "../api/types";
 import { createMediaItem, uploadMediaBytes } from "./googlePhotos";
 
 const DEDUPE_KEY = "snap-export-google-photos.browser-dedupe.v1";
@@ -29,14 +29,14 @@ export interface BrowserImportReportRow {
 }
 
 export interface BrowserImportResult {
-  job: ImportJob;
+  job: JobResponse;
   reportRows: BrowserImportReportRow[];
 }
 
 export interface RunBrowserImportOptions {
   file: File;
   accessToken: string;
-  onJob?: (job: ImportJob) => void;
+  onJob?: (job: JobResponse) => void;
   onReportRow?: (row: BrowserImportReportRow) => void;
   shouldCancel?: () => boolean;
 }
@@ -89,13 +89,13 @@ function saveDedupe(dedupe: Set<string>): void {
   }
 }
 
-function makeJob(file: File): ImportJob {
+function makeJob(file: File): JobResponse {
   const created = nowIso();
   return {
     job_id: `browser-${created}-${Math.random().toString(36).slice(2, 10)}`,
     status: "queued",
-    source_archive: file.name,
-    dry_run: false,
+    source_uri: file.name,
+    source_type: "browser-local-zip",
     created_at: created,
     updated_at: created,
     counters: {
@@ -153,7 +153,7 @@ export async function runBrowserImport({
 
     job = {
       ...job,
-      status: "running",
+      status: "uploading",
       counters: {
         ...job.counters,
         total_discovered: fileEntries.length,
@@ -161,7 +161,7 @@ export async function runBrowserImport({
         unsupported_count: fileEntries.length - supportedEntries.length,
       },
     };
-    publish("running");
+    publish("uploading");
 
     if (supportedEntries.length === 0) {
       publish("failed");
@@ -185,7 +185,7 @@ export async function runBrowserImport({
           message: "Already imported from this browser profile.",
           bytes: size,
         });
-        publish("running");
+        publish("uploading");
         continue;
       }
 
@@ -227,7 +227,7 @@ export async function runBrowserImport({
         });
       }
 
-      publish("running");
+      publish("uploading");
     }
 
     publish(terminalStatus(job.counters.failed_count, job.counters.uploaded_count, false));

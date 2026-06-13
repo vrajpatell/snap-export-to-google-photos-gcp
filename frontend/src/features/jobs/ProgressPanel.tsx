@@ -34,6 +34,7 @@ export interface ProgressPanelProps {
   polling: boolean;
   lastUpdatedAt: number | null;
   onAction: () => Promise<void> | void;
+  showControls?: boolean;
 }
 
 export function ProgressPanel({
@@ -42,6 +43,7 @@ export function ProgressPanel({
   polling,
   lastUpdatedAt,
   onAction,
+  showControls = true,
 }: ProgressPanelProps) {
   const pct = progressPercent(job.counters);
   const terminal = isTerminal(job.status);
@@ -57,8 +59,12 @@ export function ProgressPanel({
     <Card>
       <CardHeader
         eyebrow="Step 3"
-        title="Import control"
-        description="Start, pause, resume, or cancel this import. Progress updates live."
+        title={showControls ? "Import control" : "Browser import progress"}
+        description={
+          showControls
+            ? "Start, pause, resume, or cancel this import. Progress updates live."
+            : "The import is running locally in this browser tab. Keep the tab open until it completes."
+        }
         actions={
           <Badge
             tone={STATUS_BADGE_TONE[job.status]}
@@ -99,13 +105,15 @@ export function ProgressPanel({
         ) : null}
       </div>
 
-      <ImportControls
-        job={job}
-        sessionToken={sessionToken}
-        onAction={onAction}
-      />
+      {showControls ? (
+        <ImportControls
+          job={job}
+          sessionToken={sessionToken}
+          onAction={onAction}
+        />
+      ) : null}
 
-      <div className="mt-6">
+      <div className={showControls ? "mt-6" : "mt-2"}>
         <Progress
           value={pct}
           label={`${job.counters.uploaded_count.toLocaleString()} of ${job.counters.supported_files.toLocaleString()} supported files`}
@@ -158,12 +166,12 @@ export function ProgressPanel({
 
       <p className="mt-4 text-xs text-ink-muted">
         {terminal
-          ? "Polling stopped — job reached a terminal state."
+          ? "Progress stopped — job reached a terminal state."
           : polling
-            ? `Auto-refreshing every 3s · ${
+            ? `Processing locally · ${
                 lastUpdatedAt ? `last update ${formatRelativeTime(lastUpdatedAt)}` : "syncing…"
               }`
-            : "Polling paused."}
+            : "Progress paused."}
       </p>
     </Card>
   );

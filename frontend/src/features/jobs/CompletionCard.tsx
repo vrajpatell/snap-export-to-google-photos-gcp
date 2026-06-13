@@ -13,9 +13,13 @@ import { summarize } from "./jobHelpers";
 export function CompletionCard({
   job,
   onStartNew,
+  onDownloadJson,
+  onDownloadCsv,
 }: {
   job: JobResponse;
   onStartNew: () => void;
+  onDownloadJson?: () => void;
+  onDownloadCsv?: () => void;
 }) {
   const { tone, title, message } = summarize(job);
   return (
@@ -36,9 +40,13 @@ export function CompletionCard({
           variant="secondary"
           fullWidth
           leading={<IconDownload className="h-4 w-4" />}
-          onClick={() =>
-            window.open(reportUrl(job.job_id, "json"), "_blank", "noopener")
-          }
+          onClick={() => {
+            if (onDownloadJson) {
+              onDownloadJson();
+            } else {
+              window.open(reportUrl(job.job_id, "json"), "_blank", "noopener");
+            }
+          }}
         >
           Download JSON report
         </Button>
@@ -46,9 +54,13 @@ export function CompletionCard({
           variant="secondary"
           fullWidth
           leading={<IconDownload className="h-4 w-4" />}
-          onClick={() =>
-            window.open(reportUrl(job.job_id, "csv"), "_blank", "noopener")
-          }
+          onClick={() => {
+            if (onDownloadCsv) {
+              onDownloadCsv();
+            } else {
+              window.open(reportUrl(job.job_id, "csv"), "_blank", "noopener");
+            }
+          }}
         >
           Download CSV report
         </Button>

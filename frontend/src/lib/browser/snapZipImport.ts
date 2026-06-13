@@ -1,6 +1,6 @@
 import { BlobReader, BlobWriter, ZipReader } from "@zip.js/zip.js";
 
-import type { JobResponse, JobStatus } from "../api/types";
+import type { JobResponse, JobStatus } from "@/features/jobs/types";
 import { createMediaItem, uploadMediaBytes } from "./googlePhotos";
 
 const DEDUPE_KEY = "snap-export-google-photos.browser-dedupe.v1";

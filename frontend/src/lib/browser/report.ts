@@ -1,4 +1,4 @@
-import type { JobResponse } from "../api/types";
+import type { JobResponse } from "@/features/jobs/types";
 import type { BrowserImportReportRow } from "./snapZipImport";
 
 function csvEscape(value: unknown): string {

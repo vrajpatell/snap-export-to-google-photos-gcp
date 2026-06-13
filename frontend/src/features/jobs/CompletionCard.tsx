@@ -6,8 +6,7 @@ import {
   IconRefresh,
   IconSparkles,
 } from "@/components/ui/icons";
-import { reportUrl } from "@/lib/api";
-import type { JobResponse } from "@/lib/api/types";
+import type { JobResponse } from "./types";
 import { summarize } from "./jobHelpers";
 
 export function CompletionCard({
@@ -18,8 +17,8 @@ export function CompletionCard({
 }: {
   job: JobResponse;
   onStartNew: () => void;
-  onDownloadJson?: () => void;
-  onDownloadCsv?: () => void;
+  onDownloadJson: () => void;
+  onDownloadCsv: () => void;
 }) {
   const { tone, title, message } = summarize(job);
   return (
@@ -40,13 +39,7 @@ export function CompletionCard({
           variant="secondary"
           fullWidth
           leading={<IconDownload className="h-4 w-4" />}
-          onClick={() => {
-            if (onDownloadJson) {
-              onDownloadJson();
-            } else {
-              window.open(reportUrl(job.job_id, "json"), "_blank", "noopener");
-            }
-          }}
+          onClick={onDownloadJson}
         >
           Download JSON report
         </Button>
@@ -54,13 +47,7 @@ export function CompletionCard({
           variant="secondary"
           fullWidth
           leading={<IconDownload className="h-4 w-4" />}
-          onClick={() => {
-            if (onDownloadCsv) {
-              onDownloadCsv();
-            } else {
-              window.open(reportUrl(job.job_id, "csv"), "_blank", "noopener");
-            }
-          }}
+          onClick={onDownloadCsv}
         >
           Download CSV report
         </Button>

@@ -1,4 +1,4 @@
-# Vercel Deployment: Free Browser-Only Mode
+# Free Browser-Only Vercel Deployment
 
 This project is deployed to Vercel as a static Vite app. There is no production FastAPI function, database, object bucket, queue, worker, Terraform, AWS, GCP, or other paid infrastructure in the primary deployment path.
 
@@ -16,9 +16,9 @@ The import runs in the user's browser:
 | --- | --- |
 | Hosting | Vercel Hobby/static frontend |
 | UI | React + Vite |
-| ZIP processing | `@zip.js/zip.js` in the browser |
-| Authentication | Google Identity Services browser OAuth |
-| Media destination | Google Photos Library API |
+| ZIP processing | Browser with open-source `@zip.js/zip.js` library |
+| Auth | Google Identity Services token model |
+| Upload destination | Google Photos Library API |
 | Persistence | Browser `localStorage` for duplicate fingerprints; generated reports are downloaded locally |
 | Backend | Not used in the primary Vercel deployment |
 | Database/object storage/queue | None |
@@ -113,6 +113,7 @@ Do not configure these for the free Vercel deployment:
 - `GOOGLE_OAUTH_REDIRECT_URI`
 - `APP_SESSION_SECRET`
 - `OAUTH_TOKEN_ENCRYPTION_KEY`
+- Any `GCP_*`, `GOOGLE_CLOUD_*`, bucket, project, Cloud Tasks, Secret Manager, Cloud Run, or Terraform deployment variables
 
 Those are only for the optional legacy/local backend path.
 
@@ -196,11 +197,15 @@ Reports are generated in the browser and downloaded as JSON or CSV. They are not
 | Symptom | Fix |
 | --- | --- |
 | **Connect Google Photos** says client ID is missing | Set `VITE_GOOGLE_CLIENT_ID` in Vercel and redeploy. |
-| Google popup says origin is not allowed | Add the exact Vercel URL to Authorized JavaScript origins in Google Cloud Console. |
-| Import fails with 401/403 | Refresh the Google access token and confirm the Photos Library API is enabled. |
-| ZIP validation fails | Confirm the file is a real `.zip` Snapchat export. |
-| Browser becomes slow | Split the export into smaller ZIP files or use a machine with more memory. |
-| Duplicate detection seems reset | Browser storage may have been cleared or the import is running in a different browser profile. |
+| Google popup says origin is not allowed | Add the exact Vercel URL to Authorized JavaScript origins in Google Cloud Console, then redeploy/retry. |
+| Popup is blocked or closes | Allow popups for the Vercel origin and click **Connect Google Photos** again. |
+| Import fails with 401/403 | Click **Refresh access token**, confirm the Photos Library API is enabled, and verify the OAuth app granted `photoslibrary.appendonly`. |
+| Import hits 429 | Google rate-limited the app/user. Wait a few minutes and retry failed rows from the local report. |
+| Import hits 5xx | Google Photos had a temporary service error. The app retries with backoff; retry later if failures remain. |
+| ZIP validation fails | Confirm the file is a real `.zip` Snapchat export and is not corrupt or partially downloaded. |
+| Browser slow/out of memory | Split the export into smaller ZIP files, use a desktop browser, and keep the device awake. |
+| Duplicate ledger reset | Browser storage may have been cleared or the import is running in a different browser profile; duplicate detection starts fresh. |
+| Build fails on Vercel | Confirm Vercel uses the checked-in `vercel.json`, Node can install `frontend/package-lock.json`, and `VITE_GOOGLE_CLIENT_ID` is set for the target environment. |
 
 ## Security model
 

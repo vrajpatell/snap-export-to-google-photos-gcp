@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/Button";
@@ -33,6 +33,7 @@ export default function App() {
   const [creating, setCreating] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [reportRows, setReportRows] = useState<BrowserImportReportRow[]>([]);
+  const cancelRequestedRef = useRef(false);
 
   const handleAccessToken = useCallback(
     (token: string, expiresInSeconds?: number) => {
@@ -52,6 +53,7 @@ export default function App() {
       return;
     }
 
+    cancelRequestedRef.current = false;
     setCreating(true);
     setReportRows([]);
     try {
@@ -63,6 +65,7 @@ export default function App() {
           setLastUpdatedAt(Date.now());
         },
         onReportRow: (row) => setReportRows((prev) => [...prev, row]),
+        shouldCancel: () => cancelRequestedRef.current,
       });
       setJob(result.job);
       setReportRows(result.reportRows);
@@ -82,6 +85,11 @@ export default function App() {
     } finally {
       setCreating(false);
     }
+  }
+
+  function handleCancelImport() {
+    cancelRequestedRef.current = true;
+    toast("Cancellation requested. The current Google Photos request will finish first.", { icon: "⏹️" });
   }
 
   function handleStartNew() {
@@ -133,7 +141,7 @@ export default function App() {
               job={job}
               polling={creating && !isTerminal(job.status)}
               lastUpdatedAt={lastUpdatedAt}
-              onAction={() => undefined}
+              onAction={handleCancelImport}
               showControls={false}
             />
           ) : (

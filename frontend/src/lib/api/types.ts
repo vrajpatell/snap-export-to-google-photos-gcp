@@ -13,6 +13,7 @@ export interface JobCounters {
   total_discovered: number;
   supported_files: number;
   uploaded_count: number;
+  created_count?: number;
   skipped_duplicates: number;
   failed_count: number;
   unsupported_count: number;

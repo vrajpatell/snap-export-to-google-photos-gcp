@@ -111,6 +111,7 @@ function makeJob(file: File): JobResponse {
       supported_files: 0,
       unsupported_count: 0,
       uploaded_count: 0,
+      created_count: 0,
       failed_count: 0,
       skipped_duplicates: 0,
       bytes_processed: 0,
@@ -153,6 +154,15 @@ export async function runBrowserImport({
 
   publish("queued");
 
+  if (file.size > 2 * 1024 * 1024 * 1024) {
+    report({
+      path: file.name,
+      status: "skipped",
+      message: "Very large ZIP selected. Keep the device awake and consider splitting exports larger than 2 GB if the browser becomes slow or runs out of memory.",
+      bytes: file.size,
+    });
+  }
+
   const reader = new ZipReader(new BlobReader(file));
   try {
     const entries = (await reader.getEntries()) as ZipEntryLike[];
@@ -169,6 +179,16 @@ export async function runBrowserImport({
         unsupported_count: fileEntries.length - supportedEntries.length,
       },
     };
+    for (const entry of fileEntries) {
+      if (!mimeFor(entry.filename)) {
+        report({
+          path: entry.filename,
+          status: "skipped",
+          message: `Unsupported file type: .${extensionFor(entry.filename) || "no extension"}`,
+          bytes: entry.uncompressedSize ?? 0,
+        });
+      }
+    }
     publish("uploading");
 
     if (supportedEntries.length === 0) {
@@ -216,6 +236,7 @@ export async function runBrowserImport({
         dedupe.add(fingerprint);
         saveDedupe(dedupe);
         job.counters.uploaded_count += 1;
+        job.counters.created_count = (job.counters.created_count ?? 0) + 1;
         job.counters.bytes_processed += size;
         report({
           path: entry.filename,

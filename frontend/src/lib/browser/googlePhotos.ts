@@ -109,15 +109,23 @@ interface BatchCreateResponse {
   }>;
 }
 
+let batchCreateQueue: Promise<unknown> = Promise.resolve();
+
+async function enqueueBatchCreate<T>(operation: () => Promise<T>): Promise<T> {
+  const run = batchCreateQueue.then(operation, operation);
+  batchCreateQueue = run.catch(() => undefined);
+  return run;
+}
+
 export async function createMediaItems(
   accessToken: string,
-  items: Array<{ uploadToken: string; filename: string; description?: string }>,
+  items: Array<{ uploadToken: string; filename: string }>,
 ): Promise<Array<{ uploadToken: string; mediaItemId?: string; productUrl?: string; error?: string }>> {
   if (items.length > 50) {
     throw new GooglePhotosBrowserError("Google Photos batchCreate supports at most 50 items per request.");
   }
 
-  const response = await fetchWithRetry(BATCH_CREATE_ENDPOINT, {
+  const response = await enqueueBatchCreate(() => fetchWithRetry(BATCH_CREATE_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -125,14 +133,13 @@ export async function createMediaItems(
     },
     body: JSON.stringify({
       newMediaItems: items.map((item) => ({
-        description: item.description,
         simpleMediaItem: {
           fileName: item.filename,
           uploadToken: item.uploadToken,
         },
       })),
     }),
-  });
+  }));
 
   const body = await responseText(response);
   if (!response.ok) {
@@ -164,10 +171,9 @@ export async function createMediaItem(
   accessToken: string,
   uploadToken: string,
   filename: string,
-  description?: string,
 ): Promise<{ mediaItemId?: string; productUrl?: string }> {
   const [result] = await createMediaItems(accessToken, [
-    { uploadToken, filename, description },
+    { uploadToken, filename },
   ]);
   if (result.error) {
     throw new GooglePhotosBrowserError(result.error);

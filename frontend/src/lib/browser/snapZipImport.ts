@@ -1,9 +1,17 @@
-import { BlobReader, BlobWriter, ZipReader, type Entry } from "@zip.js/zip.js";
+import { BlobReader, BlobWriter, ZipReader } from "@zip.js/zip.js";
 
 import type { JobResponse, JobStatus } from "../api/types";
 import { createMediaItem, uploadMediaBytes } from "./googlePhotos";
 
 const DEDUPE_KEY = "snap-export-google-photos.browser-dedupe.v1";
+
+interface ZipEntryLike {
+  filename: string;
+  directory?: boolean;
+  uncompressedSize?: number;
+  lastModDate?: Date;
+  getData?: (writer: BlobWriter) => Promise<Blob>;
+}
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: "image/jpeg",
@@ -64,7 +72,7 @@ function isMacMetadata(path: string): boolean {
   return path.startsWith("__MACOSX/") || parts.some((part) => part.startsWith("._"));
 }
 
-function fingerprintFor(entry: Entry): string {
+function fingerprintFor(entry: ZipEntryLike): string {
   const modified = entry.lastModDate?.toISOString?.() ?? "unknown-date";
   return `${entry.filename}|${entry.uncompressedSize ?? 0}|${modified}`;
 }
@@ -147,7 +155,7 @@ export async function runBrowserImport({
 
   const reader = new ZipReader(new BlobReader(file));
   try {
-    const entries = await reader.getEntries();
+    const entries = (await reader.getEntries()) as ZipEntryLike[];
     const fileEntries = entries.filter((entry) => !entry.directory && !isMacMetadata(entry.filename));
     const supportedEntries = fileEntries.filter((entry) => Boolean(mimeFor(entry.filename)));
 

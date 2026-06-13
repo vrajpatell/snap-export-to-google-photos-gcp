@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "python -m pip install -r requirements.txt && cd frontend && npm install",
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.12",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/auth/(.*)", "destination": "/api/index.py" },
+    { "source": "/imports", "destination": "/api/index.py" },
+    { "source": "/imports/(.*)", "destination": "/api/index.py" },
+    { "source": "/staging/(.*)", "destination": "/api/index.py" },
+    { "source": "/tasks/(.*)", "destination": "/api/index.py" },
+    { "source": "/healthz", "destination": "/api/index.py" },
+    { "source": "/readyz", "destination": "/api/index.py" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

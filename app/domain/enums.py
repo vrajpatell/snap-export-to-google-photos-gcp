@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     QUEUED = "queued"
     SCANNING = "scanning"
     READY = "ready"
@@ -15,7 +15,7 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class FileStatus(str, Enum):
+class FileStatus(StrEnum):
     DISCOVERED = "discovered"
     UNSUPPORTED = "unsupported"
     DUPLICATE = "duplicate"

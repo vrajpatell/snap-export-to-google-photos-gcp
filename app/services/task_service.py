@@ -1,43 +1,27 @@
 from __future__ import annotations
 
-import base64
-import json
+import httpx
 
-from google.cloud import tasks_v2
+from app.config.settings import settings
 
 
 class TaskService:
-    def __init__(
-        self,
-        client: tasks_v2.CloudTasksClient,
-        project_id: str,
-        region: str,
-        queue: str,
-        worker_url: str,
-        worker_audience: str,
-        service_account_email: str,
-        task_token: str,
-    ) -> None:
-        self._client = client
-        self._queue_path = client.queue_path(project_id, region, queue)
-        self._worker_url = worker_url
-        self._worker_audience = worker_audience
-        self._service_account_email = service_account_email
-        self._task_token = task_token
-
     def enqueue_process_job(self, job_id: str) -> str:
-        payload = json.dumps({"job_id": job_id}).encode("utf-8")
-        task = {
-            "http_request": {
-                "http_method": tasks_v2.HttpMethod.POST,
-                "url": self._worker_url,
-                "headers": {"Content-Type": "application/json", "X-Task-Token": self._task_token},
-                "body": base64.b64encode(payload),
-                "oidc_token": {
-                    "service_account_email": self._service_account_email,
-                    "audience": self._worker_audience,
-                },
-            }
-        }
-        created = self._client.create_task(request={"parent": self._queue_path, "task": task})
-        return str(created.name)
+        if settings.queue_backend != "qstash":
+            raise ValueError("QUEUE_BACKEND must be qstash to enqueue background imports")
+        if not settings.qstash_token:
+            raise ValueError("QSTASH_TOKEN is required for qstash queueing")
+        worker_url = (
+            settings.qstash_worker_url or f"{settings.app_base_url.rstrip('/')}/tasks/process"
+        )
+        response = httpx.post(
+            f"https://qstash.upstash.io/v2/publish/{worker_url}",
+            headers={
+                "Authorization": f"Bearer {settings.qstash_token}",
+                "Content-Type": "application/json",
+            },
+            json={"job_id": job_id},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return str(response.json().get("messageId", "queued"))

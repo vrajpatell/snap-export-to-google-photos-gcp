@@ -1,67 +1,60 @@
-# snap-export-to-google-photos-gcp
+# Snap Export to Google Photos
 
-FastAPI service to import Snapchat export ZIP/folders into Google Photos using official OAuth + Photos Library API.
+Personal-use importer for moving Snapchat export media into Google Photos.
 
-This repo now includes a lightweight React frontend (`frontend/`) for:
-- app access sign-in (Google Identity, optional but recommended)
-- direct browser upload to GCS staging via signed URL
-- Google Photos OAuth connect flow
-- import start + live progress polling + report links
+## Current Architecture
 
-## Architecture (simple production)
-- Cloud Run API service
-- Cloud Run worker service (task target)
-- Cloud Tasks queue for async processing
-- Artifact Registry for images
-- Cloud Storage staging bucket
-- Firestore (Native mode) for jobs/manifests/dedupe
-- Secret Manager for OAuth values + refresh token + task token
+The primary deployment target is Vercel:
 
-## Quick audit summary
-Already present: FastAPI API routes, health endpoints, importer logic, Dockerfile, tests, baseline Terraform.
-Missing before this change: Cloud Tasks orchestration, Firestore-backed state, real OAuth token exchange/storage, CI/CD workflows, robust GCP Terraform resources, deployment/ops docs, helper scripts.
+- React/Vite frontend built from `frontend/` and served as static output.
+- FastAPI backend exposed from `api/index.py` as Vercel Python Functions.
+- Browser ZIP uploads staged directly to S3-compatible object storage with presigned URLs.
+- Postgres-compatible persistence for import jobs, manifests, dedupe state, and encrypted OAuth refresh tokens.
+- Upstash QStash (or a compatible webhook queue) for production async import processing.
+- Optional Google Identity-based application access.
 
-## Local run
+Historical GCP/Cloud Run docs are archived under `docs/archive/` and are no longer the primary production path.
+
+## Local Development
+
 ```bash
-make setup
+python -m pip install -e .[dev]
 cp .env.example .env
-make run
+uvicorn app.main:app --reload --port 8080
 ```
 
-Dependency lock maintenance:
-```bash
-python -m pip install pip-tools
-pip-compile pyproject.toml -o requirements.lock
-```
+In another shell:
 
-Frontend:
 ```bash
 cd frontend
-cp .env.example .env
 npm install
 npm run dev
 ```
 
-## Deployment docs
-- `docs/deployment-gcp.md`
-- `docs/api-frontend.md`
-- `docs/oauth-google-photos.md`
-- `docs/operations.md`
-- `docs/observability-gcp.md`
+Local development defaults to in-memory repositories and `.localdata` staging. Production must use durable Postgres and object storage because Vercel filesystems are ephemeral.
 
-## Curl examples
+## Browser Upload Flow
+
+The public API contract is preserved:
+
+1. `POST /staging/upload-url`
+2. Browser uploads directly to the returned `upload_url`
+3. `POST /staging/complete`
+4. `POST /imports?staged_path=...`
+5. `POST /imports/{job_id}/start`
+6. Poll `GET /imports/{job_id}`
+
+For same-origin Vercel deployments, `VITE_API_BASE_URL` may be empty. For separate deployments, set it to the backend Vercel URL.
+
+## Deployment
+
+See [`docs/deployment-vercel.md`](docs/deployment-vercel.md) for the production Vercel setup, required environment variables, Google OAuth redirect configuration, Postgres/object-storage/QStash setup, and limitations for large imports.
+
+## Checks
+
 ```bash
-curl "$APP_URL/healthz"
-curl "$APP_URL/readyz"
-curl -X POST "$APP_URL/imports?local_folder_path=/tmp/snap-export"
-curl -X POST "$APP_URL/imports/<job_id>/start"
+ruff check .
+mypy app
+pytest -q
+cd frontend && npm install && npm run typecheck && npm run build
 ```
-
-## Browser upload API flow
-1. `POST /staging/upload-url` with `filename`, `content_type`, `size_bytes`
-2. Browser `PUT` to returned signed URL (GCS in production)
-3. `POST /staging/complete` with `object_path` + `size_bytes`
-4. `POST /imports?staged_path=<returned_staged_path>`
-5. `POST /imports/{job_id}/start`, then poll `GET /imports/{job_id}`
-
-- TypeScript/Next.js production blueprint: `docs/production-nextjs-typescript-blueprint.md`

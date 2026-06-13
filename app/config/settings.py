@@ -6,27 +6,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "snap-export-to-google-photos-gcp"
+    app_name: str = "snap-export-to-google-photos"
     env: str = "dev"
     host: str = "0.0.0.0"
     port: int = 8080
     max_upload_size_mb: int = 512
     max_staged_upload_size_mb: int = 20480
 
-    gcp_project_id: str = ""
-    gcp_region: str = "us-central1"
     app_base_url: str = "http://localhost:8080"
-
-    gcs_staging_bucket: str = ""
-    firestore_database: str = "(default)"
-    firestore_collection_jobs: str = "import_jobs"
-    firestore_collection_dedupe: str = "dedupe_registry"
-
-    cloud_tasks_queue: str = "snap-import-queue"
-    cloud_tasks_worker_url: str = ""
-    cloud_tasks_worker_audience: str = ""
-    cloud_tasks_service_account_email: str = ""
-    cloud_tasks_task_token: str = "dev-task-token"
+    frontend_base_url: str = "http://localhost:5173"
+    frontend_allowed_origins: str = "http://localhost:5173"
 
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
@@ -35,21 +24,46 @@ class Settings(BaseSettings):
         "https://www.googleapis.com/auth/photoslibrary.appendonly,openid,email"
     )
 
-    oauth_token_secret_id: str = "google-oauth-refresh-token"
-    use_gcp_backends: bool = False
-    frontend_base_url: str = "http://localhost:5173"
-    frontend_allowed_origins: str = "http://localhost:5173"
-    enforce_user_auth: bool = False
-    allowed_user_emails: str = ""
     app_session_secret: str = ""
     app_session_ttl_seconds: int = 43200
+    enforce_user_auth: bool = False
+    allowed_user_emails: str = ""
+
+    database_url: str = ""
+    persistence_backend: str = "memory"  # memory or postgres
+    oauth_token_name: str = "google-oauth-refresh-token"
+    oauth_token_encryption_key: str = ""
+
+    storage_backend: str = "local"  # local or s3
+    s3_staging_bucket: str = ""
+    s3_region: str = "us-east-1"
+    s3_endpoint_url: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    s3_public_base_url: str = ""
+    blob_read_write_token: str = ""
+
+    queue_backend: str = "inline"  # inline or qstash
+    qstash_token: str = ""
+    qstash_current_signing_key: str = ""
+    qstash_next_signing_key: str = ""
+    qstash_worker_url: str = ""
+    task_token: str = "dev-task-token"
+
+    vercel: bool = False
+    vercel_url: str = ""
+    vercel_environment: str = ""
+    serverless_max_files_per_invocation: int = 25
+
     staging_signed_url_ttl_seconds: int = 900
     staging_allowed_content_types: str = (
         "application/zip,application/x-zip-compressed,application/octet-stream"
     )
 
     @staticmethod
-    def _split_csv(value: str) -> tuple[str, ...]:
+    def _split_csv(value: str | tuple[str, ...]) -> tuple[str, ...]:
+        if isinstance(value, tuple):
+            return value
         stripped = (value or "").strip()
         if not stripped:
             return ()
@@ -70,6 +84,10 @@ class Settings(BaseSettings):
     @property
     def staging_allowed_content_types_list(self) -> tuple[str, ...]:
         return self._split_csv(self.staging_allowed_content_types)
+
+    @property
+    def is_production(self) -> bool:
+        return self.env.lower() in {"prod", "production"} or self.vercel_environment == "production"
 
 
 settings = Settings()

@@ -11,9 +11,10 @@ def test_google_photos_two_step_upload(monkeypatch) -> None:
     def fake_post(url: str, **kwargs):  # type: ignore[no-untyped-def]
         calls.append(url)
         if url.endswith("/uploads"):
-            return httpx.Response(200, text="upload-token")
+            return httpx.Response(200, text="upload-token", request=httpx.Request("POST", url))
         return httpx.Response(
             200,
+            request=httpx.Request("POST", url),
             json={
                 "newMediaItemResults": [
                     {

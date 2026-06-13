@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.domain.interfaces import DedupeRepository, JobRepository, ManifestRepository
+from app.domain.interfaces import (
+    DedupeRepository,
+    JobRepository,
+    ManifestRepository,
+    OAuthTokenRepository,
+)
 from app.models.job import ImportFileRecord, ImportJob
 
 
@@ -45,3 +50,14 @@ class InMemoryDedupeRepository(DedupeRepository):
 
     def put(self, key: str, media_item_id: str) -> None:
         self._index[key] = media_item_id
+
+
+@dataclass
+class InMemoryOAuthTokenRepository(OAuthTokenRepository):
+    _tokens: dict[str, str] = field(default_factory=dict)
+
+    def save_refresh_token(self, token_name: str, encrypted_refresh_token: str) -> None:
+        self._tokens[token_name] = encrypted_refresh_token
+
+    def load_refresh_token(self, token_name: str) -> str:
+        return self._tokens.get(token_name, "")

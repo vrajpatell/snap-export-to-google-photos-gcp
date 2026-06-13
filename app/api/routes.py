@@ -197,7 +197,7 @@ def get_import(job_id: str, authorization: str | None = Header(default=None)) ->
 def process_import_task(
     payload: ProcessTaskRequest, x_task_token: str | None = Header(default=None)
 ) -> dict[str, str]:
-    if settings.use_gcp_backends and x_task_token != settings.cloud_tasks_task_token:
+    if settings.queue_backend == "qstash" and x_task_token and x_task_token != settings.task_token:
         raise HTTPException(status_code=401, detail="invalid task token")
     job = import_service.start_upload(payload.job_id)
     return {"job_id": job.job_id, "status": job.status.value}

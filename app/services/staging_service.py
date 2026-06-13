@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from google.cloud import storage
-
 from app.config.settings import settings
 from app.utils.files import safe_extract_zip
 
@@ -27,7 +25,7 @@ class StagingService:
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace
         self.workspace.mkdir(parents=True, exist_ok=True)
-        self._storage_client: storage.Client | None = None
+        self._s3_client = None
 
     def create_upload_url(
         self, filename: str, content_type: str, size_bytes: int
@@ -37,32 +35,31 @@ class StagingService:
         object_path = f"uploads/{datetime.now(UTC).strftime('%Y/%m/%d')}/{uuid.uuid4()}-{sanitized}"
         expires_at = datetime.now(UTC) + timedelta(seconds=settings.staging_signed_url_ttl_seconds)
 
-        if settings.use_gcp_backends:
-            if not settings.gcs_staging_bucket:
-                raise ValueError("gcs staging bucket is not configured")
-            blob = self._bucket().blob(object_path)
-            upload_url = blob.generate_signed_url(
-                version="v4",
-                expiration=timedelta(seconds=settings.staging_signed_url_ttl_seconds),
-                method="PUT",
-                content_type=content_type,
+        if settings.storage_backend == "s3":
+            if not settings.s3_staging_bucket:
+                raise ValueError("S3_STAGING_BUCKET is required for s3 staging")
+            upload_url = self._s3().generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": settings.s3_staging_bucket,
+                    "Key": object_path,
+                    "ContentType": content_type,
+                },
+                ExpiresIn=settings.staging_signed_url_ttl_seconds,
+                HttpMethod="PUT",
             )
             return StagingUploadUrl(
-                upload_url=upload_url,
-                object_path=object_path,
-                method="PUT",
-                required_headers={"Content-Type": content_type},
-                expires_at=expires_at,
+                upload_url, object_path, "PUT", {"Content-Type": content_type}, expires_at
             )
 
         local_path = self.workspace / "staging" / object_path
         local_path.parent.mkdir(parents=True, exist_ok=True)
         return StagingUploadUrl(
-            upload_url=f"/staging/local-upload/{object_path}",
-            object_path=object_path,
-            method="PUT",
-            required_headers={"Content-Type": content_type},
-            expires_at=expires_at,
+            f"/staging/local-upload/{object_path}",
+            object_path,
+            "PUT",
+            {"Content-Type": content_type},
+            expires_at,
         )
 
     def complete(self, object_path: str, expected_size_bytes: int) -> str:
@@ -70,15 +67,14 @@ class StagingService:
             raise ValueError("invalid staged object path")
         if expected_size_bytes <= 0:
             raise ValueError("invalid expected size")
-
-        if settings.use_gcp_backends:
-            blob = self._bucket().blob(object_path)
-            if not blob.exists():
-                raise ValueError("staged object does not exist")
-            blob.reload()
-            if int(blob.size or 0) != expected_size_bytes:
+        if settings.storage_backend == "s3":
+            try:
+                head = self._s3().head_object(Bucket=settings.s3_staging_bucket, Key=object_path)
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError("staged object does not exist") from exc
+            if int(head.get("ContentLength", 0)) != expected_size_bytes:
                 raise ValueError("staged object size mismatch")
-            return f"gcs://{settings.gcs_staging_bucket}/{object_path}"
+            return f"s3://{settings.s3_staging_bucket}/{object_path}"
 
         local_path = self.workspace / "staging" / object_path
         if not local_path.exists():
@@ -90,14 +86,11 @@ class StagingService:
     def materialize_staged_source(self, source_uri: str, target_root: Path) -> Path:
         download_path = target_root / "source.zip"
         target_root.mkdir(parents=True, exist_ok=True)
-        if source_uri.startswith("gcs://"):
-            bucket, object_path = self._parse_gcs_uri(source_uri)
+        if source_uri.startswith("s3://"):
+            bucket, object_path = self._parse_object_uri(source_uri, "s3://")
             if not object_path.lower().endswith(".zip"):
-                raise ValueError("staged gcs object must be a .zip file")
-            blob = self._bucket(bucket).blob(object_path)
-            if not blob.exists():
-                raise ValueError("staged source object no longer exists")
-            blob.download_to_filename(str(download_path))
+                raise ValueError("staged object must be a .zip file")
+            self._s3().download_file(bucket, object_path, str(download_path))
         elif source_uri.startswith("local://"):
             object_path = source_uri.replace("local://", "", 1)
             local_path = self.workspace / "staging" / object_path
@@ -106,14 +99,13 @@ class StagingService:
             download_path.write_bytes(local_path.read_bytes())
         else:
             raise ValueError("unsupported staged source uri")
-
         extracted = target_root / "extracted"
         safe_extract_zip(download_path, extracted)
         return extracted
 
     def write_local_upload_chunk(self, object_path: str, body: bytes, content_type: str) -> int:
-        if settings.use_gcp_backends:
-            raise ValueError("local upload endpoint is unavailable")
+        if settings.storage_backend != "local":
+            raise ValueError("local upload endpoint is unavailable for configured storage backend")
         if not object_path.startswith("uploads/"):
             raise ValueError("invalid staged object path")
         self.validate_upload(content_type=content_type, size_bytes=len(body))
@@ -121,6 +113,23 @@ class StagingService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(body)
         return len(body)
+
+    def _s3(self):  # type: ignore[no-untyped-def]
+        if self._s3_client is None:
+            import boto3
+            from botocore.client import Config
+
+            kwargs: dict[str, object] = {
+                "region_name": settings.s3_region,
+                "config": Config(signature_version="s3v4"),
+            }
+            if settings.s3_endpoint_url:
+                kwargs["endpoint_url"] = settings.s3_endpoint_url
+            if settings.s3_access_key_id and settings.s3_secret_access_key:
+                kwargs["aws_access_key_id"] = settings.s3_access_key_id
+                kwargs["aws_secret_access_key"] = settings.s3_secret_access_key
+            self._s3_client = boto3.client("s3", **kwargs)
+        return self._s3_client
 
     @staticmethod
     def _sanitize_filename(filename: str) -> str:
@@ -135,19 +144,12 @@ class StagingService:
             raise ValueError("content type is not allowed")
         if size_bytes <= 0:
             raise ValueError("file size must be greater than zero")
-        max_bytes = settings.max_staged_upload_size_mb * 1024 * 1024
-        if size_bytes > max_bytes:
+        if size_bytes > settings.max_staged_upload_size_mb * 1024 * 1024:
             raise ValueError("file exceeds staged upload size limit")
 
-    def _bucket(self, bucket_name: str | None = None) -> storage.Bucket:
-        if not self._storage_client:
-            self._storage_client = storage.Client(project=settings.gcp_project_id or None)
-        return self._storage_client.bucket(bucket_name or settings.gcs_staging_bucket)
-
     @staticmethod
-    def _parse_gcs_uri(source_uri: str) -> tuple[str, str]:
-        without_scheme = source_uri.replace("gcs://", "", 1)
-        pieces = without_scheme.split("/", 1)
+    def _parse_object_uri(source_uri: str, scheme: str) -> tuple[str, str]:
+        pieces = source_uri.replace(scheme, "", 1).split("/", 1)
         if len(pieces) != 2:
-            raise ValueError("invalid staged gcs uri")
+            raise ValueError("invalid staged object uri")
         return pieces[0], pieces[1]

@@ -33,3 +33,11 @@ class DedupeRepository(ABC):
 
     @abstractmethod
     def put(self, key: str, media_item_id: str) -> None: ...
+
+
+class OAuthTokenRepository(ABC):
+    @abstractmethod
+    def save_refresh_token(self, token_name: str, encrypted_refresh_token: str) -> None: ...
+
+    @abstractmethod
+    def load_refresh_token(self, token_name: str) -> str: ...

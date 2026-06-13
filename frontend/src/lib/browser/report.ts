@@ -1,4 +1,4 @@
-import type { ImportJob } from "../api/types";
+import type { JobResponse } from "../api/types";
 import type { BrowserImportReportRow } from "./snapZipImport";
 
 function csvEscape(value: unknown): string {
@@ -19,7 +19,7 @@ export function buildCsvReport(rows: BrowserImportReportRow[]): string {
   return [header.join(","), ...lines].join("\n");
 }
 
-export function buildJsonReport(job: ImportJob, rows: BrowserImportReportRow[]): string {
+export function buildJsonReport(job: JobResponse, rows: BrowserImportReportRow[]): string {
   return JSON.stringify(
     {
       generated_at: new Date().toISOString(),

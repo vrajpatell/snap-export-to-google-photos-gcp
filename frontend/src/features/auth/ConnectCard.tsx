@@ -29,6 +29,11 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
       onAccessToken(accessToken, expiresInSeconds);
       toast.success("Connected to Google Photos for this browser session.");
     },
+    (message) => {
+      setBusy(false);
+      setError(message);
+      toast.error(message);
+    },
   );
 
   function connectPhotos() {

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Progress } from "@/components/ui/Progress";
 import { StatTile } from "@/components/ui/StatTile";
@@ -111,6 +112,14 @@ export function ProgressPanel({
           sessionToken={sessionToken}
           onAction={onAction}
         />
+      ) : !terminal ? (
+        <Button
+          variant="secondary"
+          onClick={onAction}
+          leading={<IconX className="h-4 w-4" />}
+        >
+          Cancel browser import
+        </Button>
       ) : null}
 
       <div className={showControls ? "mt-6" : "mt-2"}>
@@ -130,10 +139,16 @@ export function ProgressPanel({
         />
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <StatTile
           label="Uploaded"
           value={job.counters.uploaded_count}
+          tone="success"
+          icon={<IconCheck className="h-3.5 w-3.5" />}
+        />
+        <StatTile
+          label="Created"
+          value={job.counters.created_count ?? job.counters.uploaded_count}
           tone="success"
           icon={<IconCheck className="h-3.5 w-3.5" />}
         />
@@ -166,7 +181,7 @@ export function ProgressPanel({
 
       <p className="mt-4 text-xs text-ink-muted">
         {terminal
-          ? "Progress stopped — job reached a terminal state."
+          ? "Polling stopped — job reached a terminal state."
           : polling
             ? `Processing locally · ${
                 lastUpdatedAt ? `last update ${formatRelativeTime(lastUpdatedAt)}` : "syncing…"

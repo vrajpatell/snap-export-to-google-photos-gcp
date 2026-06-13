@@ -1,17 +1,30 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+export const GOOGLE_PHOTOS_SCOPE = "https://www.googleapis.com/auth/photoslibrary.appendonly";
+
+interface TokenClient {
+  requestAccessToken: (options?: { prompt?: string }) => void;
+}
+
+interface TokenResponse {
+  access_token?: string;
+  expires_in?: number;
+  scope?: string;
+  token_type?: string;
+  error?: string;
+  error_description?: string;
+}
 
 declare global {
   interface Window {
     google?: {
       accounts: {
-        id: {
-          initialize: (options: {
+        oauth2: {
+          initTokenClient: (options: {
             client_id: string;
-            callback: (resp: { credential: string }) => void;
-            auto_select?: boolean;
-          }) => void;
-          renderButton: (el: HTMLElement, options: Record<string, unknown>) => void;
-          prompt: () => void;
+            scope: string;
+            callback: (response: TokenResponse) => void;
+          }) => TokenClient;
         };
       };
     };
@@ -20,45 +33,53 @@ declare global {
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
-/**
- * Attaches the Google Identity Services button to the given element and
- * invokes `onCredential` with a freshly minted ID token.
- */
 export function useGoogleIdentity(
-  targetRef: RefObject<HTMLElement>,
-  onCredential: (idToken: string) => void,
-): { enabled: boolean } {
-  const callbackRef = useRef(onCredential);
-  callbackRef.current = onCredential;
+  onAccessToken: (accessToken: string, expiresInSeconds?: number) => void,
+): {
+  enabled: boolean;
+  ready: boolean;
+  requestAccessToken: () => void;
+} {
+  const callbackRef = useRef(onAccessToken);
+  const tokenClientRef = useRef<TokenClient | null>(null);
+  const [ready, setReady] = useState(false);
+  callbackRef.current = onAccessToken;
 
   useEffect(() => {
-    if (!CLIENT_ID || !targetRef.current) return;
+    if (!CLIENT_ID) return;
 
     let cancelled = false;
     const tryInit = () => {
       if (cancelled) return;
-      const gis = window.google?.accounts?.id;
-      if (!gis || !targetRef.current) {
+      const oauth2 = window.google?.accounts?.oauth2;
+      if (!oauth2) {
         window.setTimeout(tryInit, 150);
         return;
       }
-      gis.initialize({
+
+      tokenClientRef.current = oauth2.initTokenClient({
         client_id: CLIENT_ID,
-        callback: (resp) => callbackRef.current(resp.credential),
+        scope: GOOGLE_PHOTOS_SCOPE,
+        callback: (response) => {
+          if (response.error || !response.access_token) {
+            console.error("Google OAuth failed", response.error, response.error_description);
+            return;
+          }
+          callbackRef.current(response.access_token, response.expires_in);
+        },
       });
-      gis.renderButton(targetRef.current, {
-        theme: "outline",
-        size: "large",
-        shape: "pill",
-        logo_alignment: "left",
-      });
+      setReady(true);
     };
 
     tryInit();
     return () => {
       cancelled = true;
     };
-  }, [targetRef]);
+  }, []);
 
-  return { enabled: Boolean(CLIENT_ID) };
+  const requestAccessToken = useCallback(() => {
+    tokenClientRef.current?.requestAccessToken({ prompt: "consent" });
+  }, []);
+
+  return { enabled: Boolean(CLIENT_ID), ready, requestAccessToken };
 }

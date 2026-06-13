@@ -1,18 +1,12 @@
 import { cn } from "@/lib/cn";
-import type { JobStatus } from "@/lib/api/types";
+import type { JobStatus } from "@/features/jobs/types";
 
-/**
- * Maps server statuses onto a five-step user-facing timeline.
- * "Completed" is also used for partial completion (with a warn tone).
- */
 const STEPS: { id: string; label: string; statuses: JobStatus[] }[] = [
   { id: "queued", label: "Queued", statuses: ["queued"] },
-  { id: "scanning", label: "Scanning", statuses: ["scanning"] },
-  { id: "ready", label: "Ready", statuses: ["ready"] },
-  { id: "uploading", label: "Uploading", statuses: ["uploading", "paused"] },
+  { id: "uploading", label: "Uploading", statuses: ["uploading"] },
   {
     id: "done",
-    label: "Completed",
+    label: "Done",
     statuses: ["completed", "partially_completed", "failed", "cancelled"],
   },
 ];
@@ -33,7 +27,7 @@ export function StatusTimeline({ status }: { status?: JobStatus }) {
   return (
     <ol
       className="flex w-full items-center gap-2 overflow-x-auto pb-1"
-      aria-label="Import progress timeline"
+      aria-label="Browser import progress timeline"
     >
       {STEPS.map((step, idx) => {
         const active = idx === current;

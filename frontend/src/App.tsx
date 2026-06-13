@@ -31,7 +31,7 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [job, setJob] = useState<JobResponse | null>(null);
   const [creating, setCreating] = useState(false);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [reportRows, setReportRows] = useState<BrowserImportReportRow[]>([]);
 
   const handleAccessToken = useCallback(
@@ -60,12 +60,12 @@ export default function App() {
         accessToken,
         onJob: (nextJob) => {
           setJob(nextJob);
-          setLastUpdatedAt(new Date());
+          setLastUpdatedAt(Date.now());
         },
         onReportRow: (row) => setReportRows((prev) => [...prev, row]),
       });
       setJob(result.job);
-      setLastUpdatedAt(new Date());
+      setLastUpdatedAt(Date.now());
       if (result.job.status === "completed") {
         toast.success("Import completed in your browser.");
       } else if (result.job.status === "partially_completed") {

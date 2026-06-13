@@ -226,12 +226,7 @@ export async function runBrowserImport({
 
         const filename = basenameFor(entry.filename);
         const uploadToken = await uploadMediaBytes(accessToken, blob, filename);
-        const created = await createMediaItem(
-          accessToken,
-          uploadToken,
-          filename,
-          `Imported from Snapchat export: ${entry.filename}`,
-        );
+        const created = await createMediaItem(accessToken, uploadToken, filename);
 
         dedupe.add(fingerprint);
         saveDedupe(dedupe);

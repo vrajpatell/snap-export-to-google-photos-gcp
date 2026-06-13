@@ -31,7 +31,7 @@ Request with `{"flow":"web"}` for popup completion mode.
 Response includes Google OAuth URL.
 
 ### `GET /auth/google/callback`
-Handles code exchange and stores refresh token in Secret Manager.
+Handles code exchange and stores refresh token in encrypted database token storage.
 
 ## Direct staging upload flow
 
@@ -61,7 +61,7 @@ Response:
 ```
 
 ### `PUT <upload_url>`
-Upload browser file directly to GCS.
+Upload browser file directly to S3-compatible object storage.
 
 ### `POST /staging/complete`
 Validate uploaded object exists and matches expected size.
@@ -77,7 +77,7 @@ Request:
 Response:
 ```json
 {
-  "staged_path": "gcs://<bucket>/uploads/2026/04/16/<uuid>-snap-export.zip"
+  "staged_path": "s3://<bucket>/uploads/2026/04/16/<uuid>-snap-export.zip"
 }
 ```
 

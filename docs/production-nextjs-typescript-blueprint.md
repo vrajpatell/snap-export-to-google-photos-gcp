@@ -50,7 +50,7 @@ This blueprint defines a production-ready, accessibility-first system using **Ne
 
 ### External services
 - Google OAuth, Google Photos API, optional Google Drive API.
-- Object storage (GCS/S3).
+- Object storage (S3-compatible object storage/S3).
 - Redis, PostgreSQL.
 
 ### Security boundaries
@@ -295,7 +295,7 @@ export function UploadZipForm() {
 ## 12. Deployment guide
 - Local: docker compose (web, worker, postgres, redis, minio).
 - Env vars: GOOGLE_CLIENT_ID/SECRET, NEXTAUTH_SECRET, DATABASE_URL, REDIS_URL, STORAGE_BUCKET.
-- Deploy: Cloud Run web + worker, Cloud SQL, Memorystore, Secret Manager.
+- Deploy: Vercel Functions web + worker, Cloud SQL, Memorystore, encrypted database token storage.
 
 ## 13. Testing strategy
 - Unit: scanners, dedupe logic, retry/backoff.

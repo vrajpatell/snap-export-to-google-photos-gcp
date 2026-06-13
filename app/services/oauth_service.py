@@ -4,7 +4,7 @@ import secrets
 from dataclasses import dataclass
 
 import httpx
-from google.cloud import secretmanager
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.config.settings import settings
 from app.utils.signed_tokens import SignedTokenService
@@ -17,8 +17,9 @@ class OAuthStart:
 
 
 class OAuthService:
-    def __init__(self) -> None:
+    def __init__(self, token_repo=None) -> None:  # type: ignore[no-untyped-def]
         self._tokens: SignedTokenService | None = None
+        self._token_repo = token_repo
 
     def start(self, requested_by: str | None = None, flow: str = "api") -> OAuthStart:
         nonce = secrets.token_urlsafe(18)
@@ -71,7 +72,7 @@ class OAuthService:
         if not refresh_token:
             raise ValueError("oauth token response did not include a refresh token")
         self._store_refresh_token(refresh_token)
-        return f"secret:{settings.oauth_token_secret_id}"
+        return f"db:{settings.oauth_token_name}"
 
     def callback_flow(self, state: str) -> str:
         payload = self._token_service().verify(state)
@@ -101,22 +102,37 @@ class OAuthService:
         return access_token
 
     def _store_refresh_token(self, refresh_token: str) -> None:
-        if not settings.gcp_project_id:
-            return
-        client = secretmanager.SecretManagerServiceClient()
-        parent = f"projects/{settings.gcp_project_id}/secrets/{settings.oauth_token_secret_id}"
-        client.add_secret_version(parent=parent, payload={"data": refresh_token.encode("utf-8")})
+        if not self._token_repo:
+            raise ValueError("oauth token repository is not configured")
+        self._token_repo.save_refresh_token(
+            settings.oauth_token_name, self._encrypt_refresh_token(refresh_token)
+        )
 
     def _load_refresh_token(self) -> str:
-        if not settings.gcp_project_id:
+        if not self._token_repo:
             return ""
-        client = secretmanager.SecretManagerServiceClient()
-        name = (
-            f"projects/{settings.gcp_project_id}/secrets/"
-            f"{settings.oauth_token_secret_id}/versions/latest"
-        )
-        response = client.access_secret_version(name=name)
-        return response.payload.data.decode("utf-8")
+        encrypted = self._token_repo.load_refresh_token(settings.oauth_token_name)
+        if not encrypted:
+            return ""
+        return self._decrypt_refresh_token(encrypted)
+
+    def _fernet(self) -> Fernet:
+        key = settings.oauth_token_encryption_key or settings.app_session_secret
+        if not key:
+            raise ValueError("OAUTH_TOKEN_ENCRYPTION_KEY or APP_SESSION_SECRET is required")
+        try:
+            return Fernet(key.encode("utf-8"))
+        except ValueError as exc:
+            raise ValueError("OAUTH_TOKEN_ENCRYPTION_KEY must be a Fernet key") from exc
+
+    def _encrypt_refresh_token(self, refresh_token: str) -> str:
+        return self._fernet().encrypt(refresh_token.encode("utf-8")).decode("utf-8")
+
+    def _decrypt_refresh_token(self, encrypted_refresh_token: str) -> str:
+        try:
+            return self._fernet().decrypt(encrypted_refresh_token.encode("utf-8")).decode("utf-8")
+        except InvalidToken as exc:
+            raise ValueError("stored oauth refresh token cannot be decrypted") from exc
 
     def _token_service(self) -> SignedTokenService:
         if not self._tokens:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from app.adapters.google_photos.client import GooglePhotosClient
 from app.domain.enums import FileStatus, JobStatus
@@ -34,7 +35,7 @@ class ImportService:
     def create_job(self, request: ImportJobCreate, uploaded_zip: Path | None = None) -> ImportJob:
         if uploaded_zip:
             source_uri = str(uploaded_zip)
-            source_type = "zip"
+            source_type: Literal["zip", "folder", "staged"] = "zip"
         elif request.local_folder_path:
             source_uri = request.local_folder_path
             source_type = "folder"

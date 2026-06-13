@@ -4,12 +4,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  vercel-info:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - run: |
-          echo "This workflow is deprecated."
-          echo "Use .github/workflows/deploy-cloud-run.yml for GCP CI/CD."
+          echo "Deployments are handled by Vercel Git integration."
+          echo "If using Vercel CLI instead, configure VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID."

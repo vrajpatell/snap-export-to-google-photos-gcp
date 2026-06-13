@@ -1,10 +1,10 @@
 # Security Notes
 
 - No Snapchat login or credentials are used/stored.
-- OAuth secrets are externalized to Secret Manager.
+- OAuth secrets are externalized to encrypted database token storage.
 - ZIP extraction includes path traversal checks to prevent zip-slip.
 - Uploaded file names are sanitized to basename in API layer.
-- Request body limits should be enforced at Cloud Run + API middleware.
+- Request body limits should be enforced at Vercel Functions + API middleware.
 - Supported MIME/extensions are allowlisted; unsupported files are ignored and reported.
 - Least-privilege IAM is defined in Terraform for service accounts.
 
@@ -17,7 +17,7 @@
 - Session token is backend-signed (`APP_SESSION_SECRET`), short-lived, and verified server-side
 
 ### 2) Browser upload security
-- Browser uploads directly to GCS with short-lived V4 signed URL (`POST /staging/upload-url`)
+- Browser uploads directly to S3-compatible object storage with short-lived V4 signed URL (`POST /staging/upload-url`)
 - Backend enforces:
   - filename sanitization
   - content-type allowlist (`STAGING_ALLOWED_CONTENT_TYPES`)
@@ -31,7 +31,7 @@
 
 ### 4) OAuth state robustness
 - OAuth state is signed + expiring token, not process memory
-- This remains valid across Cloud Run instance scale-out/restarts
+- This remains valid across Vercel Functions instance scale-out/restarts
 
 ### 5) Secrets posture
 - No OAuth client secret or refresh token is exposed to frontend bundle

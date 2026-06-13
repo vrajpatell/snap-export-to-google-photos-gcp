@@ -1,5 +1,5 @@
 import type { BadgeTone } from "@/components/ui/Badge";
-import type { JobCounters, JobResponse, JobStatus } from "@/lib/api/types";
+import type { JobCounters, JobResponse, JobStatus } from "./types";
 
 export const TERMINAL_STATUSES: JobStatus[] = [
   "completed",
@@ -12,44 +12,6 @@ export function isTerminal(status?: JobStatus): boolean {
   return !!status && TERMINAL_STATUSES.includes(status);
 }
 
-export function isActive(status?: JobStatus): boolean {
-  return !!status && !isTerminal(status);
-}
-
-export function isUploadingLike(status?: JobStatus): boolean {
-  return status === "uploading";
-}
-
-export interface ActionAvailability {
-  start: boolean;
-  pause: boolean;
-  resume: boolean;
-  cancel: boolean;
-}
-
-/**
- * Returns which control actions are available for a given job status.
- * Centralizing this logic makes it testable and keeps buttons consistent.
- */
-export function availableActions(status?: JobStatus): ActionAvailability {
-  if (!status) {
-    return { start: false, pause: false, resume: false, cancel: false };
-  }
-  switch (status) {
-    case "queued":
-    case "scanning":
-      return { start: false, pause: false, resume: false, cancel: true };
-    case "ready":
-      return { start: true, pause: false, resume: false, cancel: true };
-    case "uploading":
-      return { start: false, pause: true, resume: false, cancel: true };
-    case "paused":
-      return { start: false, pause: false, resume: true, cancel: true };
-    default:
-      return { start: false, pause: false, resume: false, cancel: false };
-  }
-}
-
 export function progressPercent(counters?: JobCounters): number {
   if (!counters) return 0;
   const total = counters.supported_files;
@@ -60,10 +22,7 @@ export function progressPercent(counters?: JobCounters): number {
 
 export const STATUS_BADGE_TONE: Record<JobStatus, BadgeTone> = {
   queued: "neutral",
-  scanning: "info",
-  ready: "info",
   uploading: "brand",
-  paused: "warn",
   completed: "success",
   partially_completed: "warn",
   failed: "danger",
@@ -72,10 +31,7 @@ export const STATUS_BADGE_TONE: Record<JobStatus, BadgeTone> = {
 
 export const STATUS_LABEL: Record<JobStatus, string> = {
   queued: "Queued",
-  scanning: "Scanning",
-  ready: "Ready",
   uploading: "Uploading",
-  paused: "Paused",
   completed: "Completed",
   partially_completed: "Partial",
   failed: "Failed",
@@ -99,26 +55,26 @@ export function summarize(job: JobResponse): {
       return {
         tone: "warn",
         title: "Import finished with issues",
-        message: `Uploaded ${counters.uploaded_count.toLocaleString()} of ${counters.supported_files.toLocaleString()}. Review the report for skipped or failed items.`,
+        message: `Uploaded ${counters.uploaded_count.toLocaleString()} of ${counters.supported_files.toLocaleString()}. Review the local report for skipped or failed items.`,
       };
     case "failed":
       return {
         tone: "danger",
         title: "Import failed",
         message:
-          "The import stopped unexpectedly. Download the report for diagnostic details, then retry.",
+          "The browser import stopped unexpectedly. Download the local report for diagnostic details, then retry.",
       };
     case "cancelled":
       return {
         tone: "neutral",
         title: "Import cancelled",
-        message: "You cancelled this import. No further changes were made.",
+        message: "You cancelled this browser import. Files already created in Google Photos were not removed.",
       };
     default:
       return {
         tone: "info",
         title: STATUS_LABEL[status],
-        message: "Import in progress.",
+        message: "Import in progress. Keep this browser tab open.",
       };
   }
 }

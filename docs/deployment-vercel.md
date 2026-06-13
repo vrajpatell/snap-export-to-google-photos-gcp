@@ -8,7 +8,7 @@ You do **not** need to buy a domain. Vercel provides a production URL such as:
 https://<your-project>.vercel.app
 ```
 
-Use that Vercel production URL as the public app URL and as the Google OAuth Authorized JavaScript origin.
+Use that Vercel production URL as the public app URL. For Google OAuth, copy the exact origin only: include `https://`, but do not include a path, query string, trailing slash, or wildcard.
 
 ## Architecture
 
@@ -79,8 +79,9 @@ Google may show an unverified-app warning or require verification depending on s
    - `http://localhost:5173`
    - `https://<your-project>.vercel.app`
    - Any Vercel preview URL you explicitly want to test.
-5. No redirect URI is required for the browser token flow used by this app.
-6. Copy the client ID value ending in `.apps.googleusercontent.com`.
+5. Enter origins only. Do not include a path, query string, trailing slash, or wildcard.
+6. No redirect URI is required for the browser token flow used by this app.
+7. Copy the client ID value ending in `.apps.googleusercontent.com`.
 
 The frontend requests only:
 
@@ -173,7 +174,7 @@ For a public app:
 - Configure Google OAuth as **External** and **In production** when ready for non-test users.
 - Add the exact Vercel production origin to Authorized JavaScript origins.
 
-Every visitor still authorizes their own Google Photos account. The app does not use your Google account or store other users' files.
+Every visitor still authorizes their own Google Photos account. The app does not use your Google account, store other users' files, store access tokens, or store refresh tokens.
 
 ## Smoke test after deployment
 

@@ -1,10 +1,11 @@
 # Snap Export to Google Photos
 
-Move Snapchat export media into Google Photos with a **free, static Vercel deployment**. The primary app is a React + Vite frontend that runs the import in the browser: no production backend, no Vercel Functions, no Cloud Run, no databases, no object buckets, and no hosted queues.
+Move Snapchat export media into Google Photos with a **free, public, static Vercel deployment**. The primary app is a React + Vite frontend that runs the import in the browser: no production backend, no Vercel Functions, no Cloud Run, no databases, no object buckets, and no hosted queues.
 
 ## Primary architecture
 
 - **Hosting:** Vercel static hosting/Hobby plan serving `frontend/dist`.
+- **Public URL:** the default Vercel production URL, for example `https://<your-project>.vercel.app`; no paid custom domain is required.
 - **UI:** React + Vite from `frontend/`.
 - **Auth:** Google Identity Services browser token flow with `VITE_GOOGLE_CLIENT_ID` only.
 - **ZIP processing:** local browser processing with open-source `@zip.js/zip.js`.
@@ -27,12 +28,19 @@ Unsupported files are skipped with reasons in the report. Duplicate detection is
 
 ## Deploy to Vercel for free
 
-Follow the step-by-step guide in [`docs/deployment-vercel.md`](docs/deployment-vercel.md). In short, import the repository in Vercel, use the checked-in `vercel.json`, and set only:
+Follow the step-by-step guide in [`docs/deployment-vercel.md`](docs/deployment-vercel.md). In short:
+
+1. Import this public GitHub repository into Vercel.
+2. Use the repository root and the checked-in `vercel.json`.
+3. Set only this required production/preview environment variable:
 
 ```text
 VITE_GOOGLE_CLIENT_ID=your-oauth-web-client-id.apps.googleusercontent.com
-VITE_API_BASE_URL=
 ```
+
+`VITE_API_BASE_URL` can stay empty or unset for the browser-only deployment.
+
+After the first Vercel production deployment, copy the generated `https://<your-project>.vercel.app` URL and add that exact origin to the Google OAuth Web client's **Authorized JavaScript origins**. Keep Vercel deployment protection/password protection disabled if the app should be available to anyone.
 
 Do **not** provision GCP/AWS runtime infrastructure, Postgres, S3/R2/GCS buckets, QStash, hosted queues, Vercel Blob, or Vercel Functions for the primary path.
 
@@ -47,6 +55,14 @@ npm run dev
 ```
 
 Open `http://localhost:5173` and add that origin to the Google OAuth Web client's Authorized JavaScript origins.
+
+## Public access checklist
+
+- Vercel production deployment is reachable at `https://<your-project>.vercel.app`.
+- Vercel deployment protection is disabled for production.
+- Google OAuth audience is **External**.
+- Google OAuth publishing status is **In production** if users beyond test users need to authorize the Photos scope.
+- The exact Vercel production origin is listed in the OAuth Web client's Authorized JavaScript origins.
 
 ## Optional legacy backend development
 

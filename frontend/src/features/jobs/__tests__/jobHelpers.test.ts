@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  availableActions,
   isTerminal,
   progressPercent,
   summarize,
 } from "../jobHelpers";
-import type { JobCounters, JobResponse } from "@/lib/api/types";
+import type { JobCounters, JobResponse } from "../types";
 
 const emptyCounters: JobCounters = {
   total_discovered: 0,
@@ -24,76 +23,6 @@ const job = (overrides: Partial<JobResponse>): JobResponse => ({
   ...overrides,
 });
 
-describe("availableActions", () => {
-  it("allows only cancel while queued or scanning", () => {
-    expect(availableActions("queued")).toEqual({
-      start: false,
-      pause: false,
-      resume: false,
-      cancel: true,
-    });
-    expect(availableActions("scanning")).toEqual({
-      start: false,
-      pause: false,
-      resume: false,
-      cancel: true,
-    });
-  });
-
-  it("allows start + cancel when ready", () => {
-    expect(availableActions("ready")).toEqual({
-      start: true,
-      pause: false,
-      resume: false,
-      cancel: true,
-    });
-  });
-
-  it("allows pause + cancel while uploading", () => {
-    expect(availableActions("uploading")).toEqual({
-      start: false,
-      pause: true,
-      resume: false,
-      cancel: true,
-    });
-  });
-
-  it("allows resume + cancel while paused", () => {
-    expect(availableActions("paused")).toEqual({
-      start: false,
-      pause: false,
-      resume: true,
-      cancel: true,
-    });
-  });
-
-  it("disables everything in terminal states", () => {
-    const terminal = [
-      "completed",
-      "partially_completed",
-      "failed",
-      "cancelled",
-    ] as const;
-    for (const status of terminal) {
-      expect(availableActions(status)).toEqual({
-        start: false,
-        pause: false,
-        resume: false,
-        cancel: false,
-      });
-    }
-  });
-
-  it("treats missing status as no actions", () => {
-    expect(availableActions(undefined)).toEqual({
-      start: false,
-      pause: false,
-      resume: false,
-      cancel: false,
-    });
-  });
-});
-
 describe("isTerminal", () => {
   it("detects terminal states", () => {
     expect(isTerminal("completed")).toBe(true);
@@ -101,7 +30,8 @@ describe("isTerminal", () => {
     expect(isTerminal("failed")).toBe(true);
     expect(isTerminal("cancelled")).toBe(true);
   });
-  it("returns false for active states", () => {
+
+  it("returns false for active browser states", () => {
     expect(isTerminal("queued")).toBe(false);
     expect(isTerminal("uploading")).toBe(false);
     expect(isTerminal(undefined)).toBe(false);

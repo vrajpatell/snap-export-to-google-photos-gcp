@@ -20,8 +20,7 @@ import {
   formatRelativeTime,
   truncateMiddle,
 } from "@/lib/format";
-import type { JobResponse } from "@/lib/api/types";
-import { ImportControls } from "./ImportControls";
+import type { JobResponse } from "./types";
 import {
   STATUS_BADGE_TONE,
   STATUS_LABEL,
@@ -31,25 +30,21 @@ import {
 
 export interface ProgressPanelProps {
   job: JobResponse;
-  sessionToken?: string;
   polling: boolean;
   lastUpdatedAt: number | null;
-  onAction: () => Promise<void> | void;
-  showControls?: boolean;
+  onCancelImport: () => Promise<void> | void;
 }
 
 export function ProgressPanel({
   job,
-  sessionToken,
   polling,
   lastUpdatedAt,
-  onAction,
-  showControls = true,
+  onCancelImport,
 }: ProgressPanelProps) {
   const pct = progressPercent(job.counters);
   const terminal = isTerminal(job.status);
 
-  // Re-render "Xs ago" label without re-polling.
+  // Re-render "Xs ago" label without external polling.
   const [, tick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => tick((n) => n + 1), 1000);
@@ -60,12 +55,8 @@ export function ProgressPanel({
     <Card>
       <CardHeader
         eyebrow="Step 3"
-        title={showControls ? "Import control" : "Browser import progress"}
-        description={
-          showControls
-            ? "Start, pause, resume, or cancel this import. Progress updates live."
-            : "The import is running locally in this browser tab. Keep the tab open until it completes."
-        }
+        title="Browser import progress"
+        description="The import is running locally in this browser tab. Keep the tab open until it completes."
         actions={
           <Badge
             tone={STATUS_BADGE_TONE[job.status]}
@@ -106,23 +97,17 @@ export function ProgressPanel({
         ) : null}
       </div>
 
-      {showControls ? (
-        <ImportControls
-          job={job}
-          sessionToken={sessionToken}
-          onAction={onAction}
-        />
-      ) : !terminal ? (
+      {!terminal ? (
         <Button
           variant="secondary"
-          onClick={onAction}
+          onClick={onCancelImport}
           leading={<IconX className="h-4 w-4" />}
         >
           Cancel browser import
         </Button>
       ) : null}
 
-      <div className={showControls ? "mt-6" : "mt-2"}>
+      <div className="mt-2">
         <Progress
           value={pct}
           label={`${job.counters.uploaded_count.toLocaleString()} of ${job.counters.supported_files.toLocaleString()} supported files`}
@@ -135,7 +120,6 @@ export function ProgressPanel({
                   ? "success"
                   : "brand"
           }
-          indeterminate={job.status === "scanning"}
         />
       </div>
 
@@ -181,7 +165,7 @@ export function ProgressPanel({
 
       <p className="mt-4 text-xs text-ink-muted">
         {terminal
-          ? "Polling stopped — job reached a terminal state."
+          ? "Import reached a terminal state. Download the local report before closing the tab."
           : polling
             ? `Processing locally · ${
                 lastUpdatedAt ? `last update ${formatRelativeTime(lastUpdatedAt)}` : "syncing…"

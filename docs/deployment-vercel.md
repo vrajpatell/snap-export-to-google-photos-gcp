@@ -1,29 +1,38 @@
-# Free Browser-Only Vercel Deployment
+# Free Public Browser-Only Vercel Deployment
 
-This project is deployed to Vercel as a static Vite app. There is no production FastAPI function, database, object bucket, queue, worker, Terraform, AWS, GCP, or other paid infrastructure in the primary deployment path.
+This project is deployed to Vercel as a public static Vite app. There is no production FastAPI function, database, object bucket, queue, worker, Terraform, AWS, GCP, or other paid infrastructure in the primary deployment path.
 
-The import runs in the user's browser:
+You do **not** need to buy a domain. Vercel provides a production URL such as:
 
-1. Google Identity Services returns a short-lived Google Photos access token.
-2. The user selects a Snapchat export ZIP from their computer.
-3. The browser validates and reads the ZIP locally with the open-source `@zip.js/zip.js` library.
-4. Supported photos/videos are uploaded directly from the browser to Google Photos.
-5. Duplicate fingerprints and job reports stay in the browser profile.
+```text
+https://<your-project>.vercel.app
+```
+
+Use that Vercel production URL as the public app URL and as the Google OAuth Authorized JavaScript origin.
 
 ## Architecture
 
-| Area | Free Vercel implementation |
+| Area | Free implementation |
 | --- | --- |
 | Hosting | Vercel Hobby/static frontend |
+| Public URL | Default Vercel production URL: `https://<your-project>.vercel.app` |
 | UI | React + Vite |
-| ZIP processing | Browser with open-source `@zip.js/zip.js` library |
+| ZIP processing | Browser with open-source `@zip.js/zip.js` |
 | Auth | Google Identity Services token model |
 | Upload destination | Google Photos Library API |
 | Persistence | Browser `localStorage` for duplicate fingerprints; generated reports are downloaded locally |
 | Backend | Not used in the primary Vercel deployment |
 | Database/object storage/queue | None |
 
-The existing Python/FastAPI backend code remains in the repository for optional local or future backend-backed modes, but `vercel.json` intentionally deploys only the frontend. This avoids Vercel Function runtime, request body, filesystem, and long-running worker constraints.
+The import runs in the user's browser:
+
+1. Google Identity Services returns a short-lived Google Photos access token.
+2. The user selects a Snapchat export ZIP from their computer.
+3. The browser validates and reads the ZIP locally.
+4. Supported photos/videos are uploaded directly from the browser to Google Photos.
+5. Duplicate fingerprints and job reports stay in the browser profile.
+
+The existing Python/FastAPI backend code remains in the repository for optional local or future backend-backed modes, but `vercel.json` intentionally deploys only the frontend. Do not add Vercel Functions for the free public deployment.
 
 ## Why browser-only?
 
@@ -36,26 +45,42 @@ Vercel's static hosting is enough for this workflow because the user already has
 - A Vercel account on the Hobby/free plan.
 - A Google Cloud project with the Google Photos Library API enabled.
 - A Google OAuth 2.0 Web application client ID.
-- This repository connected to Vercel through GitHub.
+- This public GitHub repository connected to Vercel.
 
 Only the OAuth client ID is stored in Vercel. It is public by design for browser OAuth. Do not add a client secret to Vercel for this browser-only deployment.
 
-## Google OAuth setup
+## Google setup
+
+### 1. Enable the Photos API
 
 In Google Cloud Console:
 
 1. Open **APIs & Services > Library**.
 2. Enable **Google Photos Library API**.
-3. Open **APIs & Services > Credentials**.
-4. Create or edit an **OAuth client ID**.
-5. Choose **Web application**.
-6. Add Authorized JavaScript origins:
+
+### 2. Configure app audience for public use
+
+If this app should be available to anyone with a Google Account:
+
+1. Open **Google Auth Platform > Audience**.
+2. Set **User type** to **External**.
+3. Set **Publishing status** to **In production** when you are ready for users beyond test users.
+
+If the app stays in **Testing**, only listed test users can authorize the Photos scope. That is useful during development but not enough for a public app.
+
+Google may show an unverified-app warning or require verification depending on scopes, branding, and user volume. This does not require paid hosting, but it may affect public rollout.
+
+### 3. Create the OAuth Web client
+
+1. Open **APIs & Services > Credentials** or **Google Auth Platform > Clients**.
+2. Create or edit an **OAuth client ID**.
+3. Choose **Web application**.
+4. Add Authorized JavaScript origins:
    - `http://localhost:5173`
    - `https://<your-project>.vercel.app`
-   - Any custom production domain you attach to Vercel.
-   - Any preview domains you want to test, if your OAuth app policy allows them.
-7. No redirect URI is required for the browser token flow used by the Vercel app.
-8. Copy the client ID value ending in `.apps.googleusercontent.com`.
+   - Any Vercel preview URL you explicitly want to test.
+5. No redirect URI is required for the browser token flow used by this app.
+6. Copy the client ID value ending in `.apps.googleusercontent.com`.
 
 The frontend requests only:
 
@@ -69,11 +94,12 @@ That scope permits uploads to the user's library but does not grant read/delete 
 
 Create the Vercel project from GitHub:
 
-1. Open Vercel and choose **Add New > Project**.
-2. Import `vrajpatell/snap-export-to-google-photos-gcp`.
-3. Use the repository root as the project root.
-4. Keep the framework preset as **Other** or **Vite**. The checked-in `vercel.json` controls the commands.
-5. Confirm these settings:
+1. Open Vercel.
+2. Choose **Add New > Project**.
+3. Import `vrajpatell/snap-export-to-google-photos-gcp`.
+4. Use the repository root as the project root.
+5. Keep the framework preset as **Other** or **Vite**. The checked-in `vercel.json` controls the commands.
+6. Confirm these settings:
 
 | Setting | Value |
 | --- | --- |
@@ -93,6 +119,8 @@ The same settings are encoded in `vercel.json`:
 }
 ```
 
+The SPA rewrite lets direct visits and refreshes resolve to the React app.
+
 ## Vercel environment variables
 
 Set this environment variable in Vercel Project Settings for **Production** and **Preview**:
@@ -100,7 +128,7 @@ Set this environment variable in Vercel Project Settings for **Production** and 
 | Name | Required | Value |
 | --- | --- | --- |
 | `VITE_GOOGLE_CLIENT_ID` | Yes | Google OAuth Web client ID |
-| `VITE_API_BASE_URL` | No | Leave empty for browser-only Vercel mode |
+| `VITE_API_BASE_URL` | No | Leave empty or unset for browser-only Vercel mode |
 
 Do not configure these for the free Vercel deployment:
 
@@ -115,20 +143,49 @@ Do not configure these for the free Vercel deployment:
 - `OAUTH_TOKEN_ENCRYPTION_KEY`
 - Any `GCP_*`, `GOOGLE_CLOUD_*`, bucket, project, Cloud Tasks, Secret Manager, Cloud Run, or Terraform deployment variables
 
-Those are only for the optional legacy/local backend path.
+Those are only for optional legacy/local backend experiments.
 
-## Deploy
+## Deploy to the default Vercel production URL
 
-After the environment variable is saved:
+1. Save `VITE_GOOGLE_CLIENT_ID` in Vercel.
+2. Deploy `main`.
+3. Open the generated production URL, usually:
 
-1. Push to `main`, or click **Redeploy** in Vercel.
-2. Open the Vercel deployment URL.
-3. Click **Connect Google Photos**.
+```text
+https://<your-project>.vercel.app
+```
+
+4. Copy the exact origin, including `https://` and no trailing slash.
+5. Add that exact origin to the OAuth Web client's **Authorized JavaScript origins**.
+6. Wait a few minutes if Google says the origin is still mismatched.
+7. Open the Vercel production URL again and click **Connect Google Photos**.
+
+No custom domain is required. Do not buy a domain unless you later want branded URLs.
+
+## Make the app available to anyone
+
+For a public app:
+
+- Keep the GitHub repository public, or connect your private repo to Vercel and deploy publicly.
+- Keep Vercel production deployment protection/password protection disabled.
+- Do not enable Vercel Authentication on the production deployment.
+- Use the generated `https://<your-project>.vercel.app` URL as the public URL.
+- Configure Google OAuth as **External** and **In production** when ready for non-test users.
+- Add the exact Vercel production origin to Authorized JavaScript origins.
+
+Every visitor still authorizes their own Google Photos account. The app does not use your Google account or store other users' files.
+
+## Smoke test after deployment
+
+1. Open `https://<your-project>.vercel.app` in a regular browser window.
+2. Click **Connect Google Photos**.
+3. Confirm Google shows your OAuth app and the `photoslibrary.appendonly` permission.
 4. Select a small Snapchat export ZIP first.
 5. Click **Validate ZIP locally**.
 6. Click **Start browser import**.
 7. Keep the browser tab open until the progress panel reaches a terminal status.
 8. Download the JSON or CSV report.
+9. Confirm the uploaded media appears in the signed-in user's Google Photos library.
 
 ## Local development
 
@@ -186,6 +243,7 @@ Reports are generated in the browser and downloaded as JSON or CSV. They are not
 
 - Vercel Python Functions for the import API.
 - Server-side upload staging.
+- Frontend API client wrappers for `/imports`, `/staging`, and server OAuth.
 - Cloud/GCS/S3/R2 buckets.
 - Firestore/Postgres job persistence.
 - Cloud Tasks/QStash/background workers.
@@ -197,7 +255,8 @@ Reports are generated in the browser and downloaded as JSON or CSV. They are not
 | Symptom | Fix |
 | --- | --- |
 | **Connect Google Photos** says client ID is missing | Set `VITE_GOOGLE_CLIENT_ID` in Vercel and redeploy. |
-| Google popup says origin is not allowed | Add the exact Vercel URL to Authorized JavaScript origins in Google Cloud Console, then redeploy/retry. |
+| Google popup says origin is not allowed | Add the exact `https://<your-project>.vercel.app` origin to Authorized JavaScript origins. Do not include a path or trailing slash. |
+| App works for you but not other users | Change Google OAuth audience to External and publishing status to In production, then complete any required verification steps. |
 | Popup is blocked or closes | Allow popups for the Vercel origin and click **Connect Google Photos** again. |
 | Import fails with 401/403 | Click **Refresh access token**, confirm the Photos Library API is enabled, and verify the OAuth app granted `photoslibrary.appendonly`. |
 | Import hits 429 | Google rate-limited the app/user. Wait a few minutes and retry failed rows from the local report. |

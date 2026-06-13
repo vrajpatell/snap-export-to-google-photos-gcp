@@ -21,7 +21,7 @@ import {
   runBrowserImport,
   type BrowserImportReportRow,
 } from "@/lib/browser/snapZipImport";
-import type { JobResponse } from "@/lib/api/types";
+import type { JobResponse } from "@/features/jobs/types";
 
 export default function App() {
   const [connected, setConnected] = useState(false);
@@ -141,8 +141,7 @@ export default function App() {
               job={job}
               polling={creating && !isTerminal(job.status)}
               lastUpdatedAt={lastUpdatedAt}
-              onAction={handleCancelImport}
-              showControls={false}
+              onCancelImport={handleCancelImport}
             />
           ) : (
             <Card>

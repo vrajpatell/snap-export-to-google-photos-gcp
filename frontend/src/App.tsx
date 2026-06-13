@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/Button";
@@ -11,70 +11,72 @@ import { ConnectCard } from "@/features/auth/ConnectCard";
 import { UploadCard } from "@/features/upload/UploadCard";
 import { CompletionCard } from "@/features/jobs/CompletionCard";
 import { ProgressPanel } from "@/features/jobs/ProgressPanel";
-import { useJobPolling } from "@/features/jobs/useJobPolling";
 import { isTerminal } from "@/features/jobs/jobHelpers";
 import {
-  ApiError,
-  createImport,
-  createSession,
-  getImport,
-  startImport,
-} from "@/lib/api";
+  buildCsvReport,
+  buildJsonReport,
+  downloadTextFile,
+} from "@/lib/browser/report";
+import {
+  runBrowserImport,
+  type BrowserImportReportRow,
+} from "@/lib/browser/snapZipImport";
 import type { JobResponse } from "@/lib/api/types";
 
 export default function App() {
-  const [sessionToken, setSessionToken] = useState<string | undefined>();
-  const [sessionEmail, setSessionEmail] = useState<string | undefined>();
   const [connected, setConnected] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [accessTokenExpiresAt, setAccessTokenExpiresAt] = useState<number | null>(null);
   const [stagedPath, setStagedPath] = useState<string | null>(null);
-  const [initialJob, setInitialJob] = useState<JobResponse | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [job, setJob] = useState<JobResponse | null>(null);
   const [creating, setCreating] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [reportRows, setReportRows] = useState<BrowserImportReportRow[]>([]);
 
-  const {
-    job,
-    setJob,
-    polling,
-    lastUpdatedAt,
-    refresh,
-  } = useJobPolling(initialJob, sessionToken);
-
-  // Listen for OAuth popup completion.
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.data?.type === "oauth_complete" && event.data?.ok) {
-        setConnected(true);
-        toast.success("Google Photos connected");
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
-
-  const handleSessionCreated = useCallback(async (idToken: string) => {
-    try {
-      const session = await createSession(idToken);
-      setSessionToken(session.session_token);
-      setSessionEmail(session.email);
-      toast.success(`Signed in as ${session.email}`);
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : (err as Error).message;
-      toast.error(message);
-    }
-  }, []);
+  const handleAccessToken = useCallback(
+    (token: string, expiresInSeconds?: number) => {
+      setAccessToken(token);
+      setConnected(true);
+      setAccessTokenExpiresAt(
+        expiresInSeconds ? Date.now() + expiresInSeconds * 1000 : null,
+      );
+    },
+    [],
+  );
 
   async function handleCreateAndStart() {
-    if (!stagedPath || creating) return;
+    if (!selectedFile || !accessToken || creating) return;
+    if (accessTokenExpiresAt && accessTokenExpiresAt - Date.now() < 60_000) {
+      toast.error("Your Google access token is about to expire. Refresh access first.");
+      return;
+    }
+
     setCreating(true);
+    setReportRows([]);
     try {
-      const created = await createImport(stagedPath, sessionToken);
-      await startImport(created.job_id, sessionToken);
-      const latest = await getImport(created.job_id, sessionToken);
-      setInitialJob(latest);
-      toast.success("Import started");
+      const result = await runBrowserImport({
+        file: selectedFile,
+        accessToken,
+        onJob: (nextJob) => {
+          setJob(nextJob);
+          setLastUpdatedAt(new Date());
+        },
+        onReportRow: (row) => setReportRows((prev) => [...prev, row]),
+      });
+      setJob(result.job);
+      setLastUpdatedAt(new Date());
+      if (result.job.status === "completed") {
+        toast.success("Import completed in your browser.");
+      } else if (result.job.status === "partially_completed") {
+        toast("Import completed with some failures. Download the report for details.", {
+          icon: "⚠️",
+        });
+      } else {
+        toast.error("Import did not complete. Download the report for details.");
+      }
     } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : (err as Error).message;
+      const message = err instanceof Error ? err.message : String(err);
       toast.error(message);
     } finally {
       setCreating(false);
@@ -82,48 +84,63 @@ export default function App() {
   }
 
   function handleStartNew() {
-    setInitialJob(null);
     setJob(null);
     setStagedPath(null);
+    setSelectedFile(null);
+    setReportRows([]);
+    setLastUpdatedAt(null);
   }
 
-  const canCreate = Boolean(stagedPath) && !job;
+  function downloadJsonReport() {
+    if (!job) return;
+    downloadTextFile(
+      `${job.job_id}.json`,
+      buildJsonReport(job, reportRows),
+      "application/json;charset=utf-8",
+    );
+  }
+
+  function downloadCsvReport() {
+    if (!job) return;
+    downloadTextFile(
+      `${job.job_id}.csv`,
+      buildCsvReport(reportRows),
+      "text/csv;charset=utf-8",
+    );
+  }
+
+  const canCreate = Boolean(stagedPath && selectedFile && accessToken) && !job;
   const showCompletion = job && isTerminal(job.status);
 
   return (
     <div className="min-h-full">
       <Toaster />
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:py-12">
-        <Header connected={connected} accountEmail={sessionEmail} />
+        <Header connected={connected} />
 
         <div className="grid gap-6">
-          <ConnectCard
-            sessionToken={sessionToken}
-            sessionEmail={sessionEmail}
-            connected={connected}
-            onGoogleIdToken={handleSessionCreated}
-          />
+          <ConnectCard connected={connected} onAccessToken={handleAccessToken} />
 
           <UploadCard
-            sessionToken={sessionToken}
             disabled={!connected}
             onStagedPath={setStagedPath}
+            onFileReady={setSelectedFile}
           />
 
           {job ? (
             <ProgressPanel
               job={job}
-              sessionToken={sessionToken}
-              polling={polling}
+              polling={creating && !isTerminal(job.status)}
               lastUpdatedAt={lastUpdatedAt}
-              onAction={refresh}
+              onAction={() => undefined}
+              showControls={false}
             />
           ) : (
             <Card>
               <CardHeader
                 eyebrow="Step 3"
-                title="Start the import"
-                description="Once your archive is uploaded, kick off the import and watch it progress live."
+                title="Start the local import"
+                description="Your browser will unzip the Snapchat export, upload supported media directly to Google Photos, and keep a local duplicate ledger in this browser profile."
               />
               {canCreate ? (
                 <Button
@@ -131,25 +148,30 @@ export default function App() {
                   loading={creating}
                   leading={<IconPlay className="h-4 w-4" />}
                 >
-                  Create & start import
+                  Start browser import
                 </Button>
               ) : (
                 <EmptyState
                   icon={<IconSparkles className="h-5 w-5" />}
-                  title="Waiting for a staged archive"
-                  description="Connect your Google account and upload a Snapchat export to unlock this step."
+                  title="Waiting for access and a local archive"
+                  description="Connect Google Photos and validate a Snapchat export ZIP to unlock this step."
                 />
               )}
             </Card>
           )}
 
           {showCompletion && job ? (
-            <CompletionCard job={job} onStartNew={handleStartNew} />
+            <CompletionCard
+              job={job}
+              onStartNew={handleStartNew}
+              onDownloadJson={downloadJsonReport}
+              onDownloadCsv={downloadCsvReport}
+            />
           ) : null}
         </div>
 
         <footer className="mt-10 text-center text-xs text-ink-subtle">
-          Built with care · Your files stay in your own Google Photos library.
+          Free Vercel mode · No server-side storage, queues, databases, or paid cloud infrastructure.
         </footer>
       </main>
     </div>

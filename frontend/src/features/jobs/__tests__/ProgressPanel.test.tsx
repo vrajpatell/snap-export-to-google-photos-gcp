@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { JobResponse } from "@/lib/api/types";
+import type { JobResponse } from "../types";
 import { ProgressPanel } from "../ProgressPanel";
 
 const baseJob = (overrides: Partial<JobResponse> = {}): JobResponse => ({
@@ -28,7 +28,7 @@ describe("ProgressPanel", () => {
         job={baseJob()}
         polling
         lastUpdatedAt={Date.now()}
-        onAction={() => {}}
+        onCancelImport={() => {}}
       />,
     );
 
@@ -43,34 +43,33 @@ describe("ProgressPanel", () => {
     expect(screen.getByText(/Bytes Processed/)).toBeInTheDocument();
   });
 
-  it("indicates that polling has stopped for terminal jobs", () => {
+  it("tells users to download the local report for terminal jobs", () => {
     render(
       <ProgressPanel
         job={baseJob({ status: "completed" })}
         polling={false}
         lastUpdatedAt={Date.now()}
-        onAction={() => {}}
+        onCancelImport={() => {}}
       />,
     );
     expect(
-      screen.getByText(/Polling stopped/i),
+      screen.getByText(/Download the local report/i),
     ).toBeInTheDocument();
   });
 
-  it("renders the cancel control but disables inapplicable ones when uploading", () => {
+  it("renders only the browser cancel control while uploading", () => {
     render(
       <ProgressPanel
         job={baseJob({ status: "uploading" })}
         polling
         lastUpdatedAt={Date.now()}
-        onAction={() => {}}
+        onCancelImport={() => {}}
       />,
     );
-    expect(
-      screen.getByRole("button", { name: /Start import/i }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Pause/i })).not.toBeDisabled();
-    expect(screen.getByRole("button", { name: /Resume/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Cancel/i })).not.toBeDisabled();
+
+    expect(screen.getByRole("button", { name: /Cancel browser import/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Start import/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Pause/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Resume/i })).not.toBeInTheDocument();
   });
 });

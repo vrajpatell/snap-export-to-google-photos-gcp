@@ -65,6 +65,7 @@ export default function App() {
         onReportRow: (row) => setReportRows((prev) => [...prev, row]),
       });
       setJob(result.job);
+      setReportRows(result.reportRows);
       setLastUpdatedAt(Date.now());
       if (result.job.status === "completed") {
         toast.success("Import completed in your browser.");

@@ -16,34 +16,23 @@ import { formatBytes } from "@/lib/format";
 import { useStagedUpload } from "./useStagedUpload";
 
 const PHASE_LABEL: Record<string, string> = {
-  idle: "Ready to upload",
-  preparing: "Preparing secure upload...",
-  uploading: "Uploading to staging bucket",
-  finalizing: "Validating uploaded archive",
-  complete: "Upload complete",
-  error: "Upload failed",
+  idle: "Ready to validate",
+  preparing: "Checking ZIP archive...",
+  uploading: "Keeping file in your browser",
+  finalizing: "Preparing local import",
+  complete: "ZIP ready",
+  error: "Validation failed",
 };
 
 export interface UploadCardProps {
-  sessionToken?: string;
   disabled?: boolean;
   onStagedPath: (path: string | null) => void;
+  onFileReady: (file: File | null) => void;
 }
 
-export function UploadCard({
-  sessionToken,
-  disabled,
-  onStagedPath,
-}: UploadCardProps) {
+export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardProps) {
   const [file, setFile] = useState<File | null>(null);
-  const {
-    phase,
-    progress,
-    stagedPath,
-    error,
-    upload,
-    reset,
-  } = useStagedUpload(sessionToken);
+  const { phase, progress, stagedPath, error, upload, reset } = useStagedUpload();
 
   useEffect(() => {
     onStagedPath(stagedPath);
@@ -51,11 +40,13 @@ export function UploadCard({
 
   useEffect(() => {
     if (phase === "complete") {
-      toast.success("Snapchat export uploaded and validated.");
+      toast.success("Snapchat export validated locally.");
+      onFileReady(file);
     } else if (phase === "error" && error) {
       toast.error(error);
+      onFileReady(null);
     }
-  }, [phase, error]);
+  }, [phase, error, file, onFileReady]);
 
   const uploading = phase === "preparing" || phase === "uploading" || phase === "finalizing";
   const indeterminate = phase === "preparing" || phase === "finalizing";
@@ -65,8 +56,8 @@ export function UploadCard({
     <Card>
       <CardHeader
         eyebrow="Step 2"
-        title="Upload your Snapchat export"
-        description="Drag your exported .zip here. We validate it server-side before any import starts."
+        title="Choose your Snapchat export"
+        description="Drag your exported .zip here. In free Vercel mode the archive stays in your browser; it is never staged in a cloud bucket."
         actions={
           complete ? (
             <Badge tone="success" leading={<IconCheck className="h-3.5 w-3.5" />}>
@@ -80,13 +71,14 @@ export function UploadCard({
         file={file}
         onSelect={(next) => {
           setFile(next);
+          onFileReady(null);
           if (!next) {
             reset();
             onStagedPath(null);
           }
         }}
         disabled={disabled || uploading}
-        hint="ZIP up to several GB"
+        hint="ZIP processed locally in your browser"
       />
 
       {file ? (
@@ -106,13 +98,14 @@ export function UploadCard({
                     setFile(null);
                     reset();
                     onStagedPath(null);
+                    onFileReady(null);
                   }}
                   leading={<IconX className="h-4 w-4" />}
                 >
                   Replace file
                 </Button>
                 <span className="text-xs text-ink-muted tabular">
-                  {formatBytes(file.size)} uploaded
+                  {formatBytes(file.size)} selected locally
                 </span>
               </>
             ) : phase === "error" ? (
@@ -121,7 +114,7 @@ export function UploadCard({
                 onClick={() => upload(file)}
                 leading={<IconRefresh className="h-4 w-4" />}
               >
-                Retry upload
+                Retry validation
               </Button>
             ) : (
               <Button
@@ -131,7 +124,7 @@ export function UploadCard({
                 disabled={disabled}
                 leading={<IconUpload className="h-4 w-4" />}
               >
-                {uploading ? "Uploading..." : "Upload to staging"}
+                {uploading ? "Checking..." : "Validate ZIP locally"}
               </Button>
             )}
           </div>

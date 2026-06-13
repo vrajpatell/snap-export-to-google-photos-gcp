@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
 
 import { Badge } from "@/components/ui/Badge";
@@ -11,60 +11,38 @@ import {
   IconRefresh,
   IconShield,
 } from "@/components/ui/icons";
-import { ApiError, startGooglePhotosOAuth } from "@/lib/api";
-import { useGoogleIdentity } from "./useGoogleIdentity";
+import { GOOGLE_PHOTOS_SCOPE, useGoogleIdentity } from "./useGoogleIdentity";
 
 interface ConnectCardProps {
-  sessionToken?: string;
-  sessionEmail?: string;
   connected: boolean;
-  /** Receives a Google-issued ID token; caller exchanges it for a session. */
-  onGoogleIdToken: (idToken: string) => void;
-  onConnectingStarted?: () => void;
+  onAccessToken: (accessToken: string, expiresInSeconds?: number) => void;
 }
 
-export function ConnectCard({
-  sessionToken,
-  sessionEmail,
-  connected,
-  onGoogleIdToken,
-  onConnectingStarted,
-}: ConnectCardProps) {
+export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  const { enabled: identityEnabled } = useGoogleIdentity(googleBtnRef, onGoogleIdToken);
+  const { enabled: identityEnabled, ready, requestAccessToken } = useGoogleIdentity(
+    (accessToken, expiresInSeconds) => {
+      setBusy(false);
+      setError(null);
+      onAccessToken(accessToken, expiresInSeconds);
+      toast.success("Connected to Google Photos for this browser session.");
+    },
+  );
 
-  async function connectPhotos() {
-    if (busy) return;
+  function connectPhotos() {
+    if (!identityEnabled) {
+      setError("Set VITE_GOOGLE_CLIENT_ID before connecting Google Photos.");
+      return;
+    }
+    if (!ready) {
+      setError("Google Identity Services is still loading. Try again in a moment.");
+      return;
+    }
     setBusy(true);
     setError(null);
-    try {
-      const start = await startGooglePhotosOAuth(sessionToken);
-      const popup = window.open(
-        start.authorization_url,
-        "_blank",
-        "width=540,height=700,menubar=no,toolbar=no",
-      );
-      if (!popup) {
-        setError(
-          "Your browser blocked the authorization window. Please allow popups and try again.",
-        );
-        return;
-      }
-      onConnectingStarted?.();
-      toast("Complete Google Photos authorization in the popup window.", {
-        icon: "🔐",
-      });
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : (err as Error).message;
-      setError(message);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
+    requestAccessToken();
   }
 
   return (
@@ -72,7 +50,7 @@ export function ConnectCard({
       <CardHeader
         eyebrow="Step 1"
         title="Connect your Google Photos account"
-        description="Grant access so we can securely upload your memories to your own library. You can revoke access at any time from your Google account."
+        description="Grant one browser session access to upload directly to your own Google Photos library. No backend stores your tokens or files."
         actions={
           connected ? (
             <Badge tone="success" leading={<IconCheck className="h-3.5 w-3.5" />}>
@@ -82,29 +60,23 @@ export function ConnectCard({
         }
       />
 
-      {identityEnabled ? (
-        <div className="mb-4">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-subtle">
-            Sign in
-          </p>
-          <div ref={googleBtnRef} aria-label="Sign in with Google" />
-          {sessionEmail ? (
-            <p className="mt-2 text-xs text-ink-muted">
-              Signed in as <span className="text-ink">{sessionEmail}</span>
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="mb-4 rounded-2xl border border-line bg-white/70 p-4 text-sm text-ink-muted">
+        <p>
+          This free Vercel mode uses Google Identity Services in the browser with the
+          <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">{GOOGLE_PHOTOS_SCOPE}</code>
+          scope. You may need to reconnect if the access token expires during a long import.
+        </p>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={connectPhotos}
           loading={busy}
-          disabled={connected}
+          disabled={connected && busy}
           leading={<IconCloud className="h-4 w-4" />}
           trailing={!connected ? <IconLink className="h-4 w-4" /> : undefined}
         >
-          {connected ? "Connected to Google Photos" : "Connect Google Photos"}
+          {connected ? "Reconnect Google Photos" : "Connect Google Photos"}
         </Button>
         {connected ? (
           <Button
@@ -112,14 +84,14 @@ export function ConnectCard({
             onClick={connectPhotos}
             leading={<IconRefresh className="h-4 w-4" />}
           >
-            Reauthorize
+            Refresh access token
           </Button>
         ) : null}
       </div>
 
       <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-muted">
         <IconShield className="h-3.5 w-3.5 text-success" aria-hidden />
-        We only ever upload to your library — your files are never shared.
+        Files stay on your device until your browser uploads each item directly to Google Photos.
       </p>
 
       {error ? (

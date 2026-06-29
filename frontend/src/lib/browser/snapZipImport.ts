@@ -74,7 +74,7 @@ export async function runBrowserImport({ file, accessToken, onJob, onReportRow, 
           report({ path: entry.filename, status: "skipped", message: "Already imported from this browser profile.", bytes: size, filename: fileName, extension: record.extension, detectedMime: record.detectedMime, sha256, duplicate: true, qualityWarnings: quality.warnings });
           publish("uploading"); return;
         }
-        const uploadMode = blob.size >= RESUMABLE_UPLOAD_THRESHOLD_BYTES || categoryForMime(record.detectedMime) === "video" ? "resumable" : "raw";
+        const uploadMode: "raw" | "resumable" = blob.size >= RESUMABLE_UPLOAD_THRESHOLD_BYTES || categoryForMime(record.detectedMime) === "video" ? "resumable" : "raw";
         await upsertMediaItem({ ...record, sha256, status: "uploading", uploadMode, attempts: 1 });
         logInfo(uploadMode === "raw" ? "upload.raw_started" : "upload.resumable_started", { component: "snapZipImport", metadata: { index: index + 1, bytes: blob.size, mime: record.detectedMime } });
         const uploadToken = await retry(() => uploadMode === "raw" ? uploadMediaBytes(accessToken, new Blob([blob], { type: record.detectedMime }), fileName) : uploadMediaBytesResumable(accessToken, new Blob([blob], { type: record.detectedMime }), fileName, { contentType: record.detectedMime }), { isRetryable: retryableFrom, onRetry: (error, attempt, delayMs) => logWarn("upload.retry_scheduled", { component: "snapZipImport", metadata: { attempt, delayMs, retryable: retryableFrom(error) } }) });

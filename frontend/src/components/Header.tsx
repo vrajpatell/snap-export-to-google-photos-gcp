@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/Badge";
-import { IconShield, IconSparkles } from "@/components/ui/icons";
+import { IconSparkles } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header({
@@ -10,18 +10,18 @@ export function Header({
   accountEmail?: string;
 }) {
   return (
-    <header className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-start gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lift">
-          <IconSparkles className="h-5 w-5" />
+    <header className="motion-rise mb-10 flex items-center justify-between gap-4 rounded-full border border-white/60 bg-white/55 px-4 py-3 shadow-soft backdrop-blur-2xl dark:border-white/10 dark:bg-surface-raised/55">
+      <div className="flex items-center gap-3">
+        <div className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-indigo-500 text-white shadow-lift">
+          <span className="absolute inset-0 rounded-2xl bg-white/20 blur-sm" />
+          <IconSparkles className="relative h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">
-            Snap to Google Photos
-          </h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink-muted">
-            <IconShield className="h-3.5 w-3.5 text-success" aria-hidden />
-            Secure import with live progress and audit-ready reports
+          <p className="text-sm font-black tracking-tight text-ink sm:text-base">
+            Snap to Photos
+          </p>
+          <p className="hidden text-xs text-ink-subtle sm:block">
+            Private Snapchat export importer
           </p>
         </div>
       </div>
@@ -30,7 +30,7 @@ export function Header({
           {connected
             ? accountEmail
               ? `Connected · ${accountEmail}`
-              : "Google Photos connected"
+              : "Connected"
             : "Not connected"}
         </Badge>
         <ThemeToggle />

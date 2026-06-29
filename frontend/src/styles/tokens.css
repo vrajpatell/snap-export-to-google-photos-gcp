@@ -1,17 +1,16 @@
-/* Design tokens. All color channels are declared as r g b triples so Tailwind
-   can apply alpha via `rgb(var(--x) / <alpha-value>)`. */
+/* Design tokens. Color channels are declared as r g b triples so Tailwind can apply alpha. */
 :root {
-  --brand-50: 238 242 255;
-  --brand-100: 224 231 255;
-  --brand-200: 199 210 254;
-  --brand-400: 129 140 248;
-  --brand-500: 99 102 241;
-  --brand-600: 79 70 229;
-  --brand-700: 67 56 202;
+  --brand-50: 240 253 250;
+  --brand-100: 204 251 241;
+  --brand-200: 153 246 228;
+  --brand-400: 45 212 191;
+  --brand-500: 20 184 166;
+  --brand-600: 13 148 136;
+  --brand-700: 15 118 110;
 
   --surface: 255 255 255;
   --surface-raised: 255 255 255;
-  --surface-sunken: 247 248 252;
+  --surface-sunken: 245 247 251;
   --border: 226 232 240;
   --border-strong: 203 213 225;
 
@@ -29,8 +28,8 @@
 
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -43,25 +42,25 @@
 
   --motion-fast: 150ms;
   --motion-base: 220ms;
-  --motion-slow: 320ms;
+  --motion-slow: 420ms;
 }
 
 .dark {
-  --brand-50: 49 46 129;
-  --brand-100: 55 48 163;
-  --brand-200: 67 56 202;
-  --brand-400: 129 140 248;
-  --brand-500: 129 140 248;
-  --brand-600: 99 102 241;
-  --brand-700: 79 70 229;
+  --brand-50: 19 78 74;
+  --brand-100: 17 94 89;
+  --brand-200: 15 118 110;
+  --brand-400: 45 212 191;
+  --brand-500: 45 212 191;
+  --brand-600: 20 184 166;
+  --brand-700: 13 148 136;
 
-  --surface: 17 24 39;
-  --surface-raised: 22 30 46;
-  --surface-sunken: 11 16 27;
-  --border: 30 41 59;
-  --border-strong: 51 65 85;
+  --surface: 12 18 32;
+  --surface-raised: 18 26 44;
+  --surface-sunken: 5 10 24;
+  --border: 35 48 72;
+  --border-strong: 65 84 112;
 
-  --ink: 241 245 249;
+  --ink: 248 250 252;
   --ink-muted: 203 213 225;
   --ink-subtle: 148 163 184;
   --ink-inverted: 15 23 42;

@@ -21,7 +21,7 @@ let flushTimer: number | undefined;
 let queue: Array<Record<string, unknown>> = [];
 
 function telemetryEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_VERCEL_CLIENT_LOGS !== "false";
+  return import.meta.env.PROD && import.meta.env.VITE_ENABLE_VERCEL_CLIENT_LOGS !== "false";
 }
 
 function getSessionId(): string {
@@ -170,6 +170,7 @@ export function initClientLogging(): void {
     metadata: {
       mode: import.meta.env.MODE,
       vercelEnv: import.meta.env.VITE_VERCEL_ENV || "unknown",
+      telemetryForwardingEnabled: telemetryEnabled(),
       userAgent: navigator.userAgent,
       language: navigator.language,
       viewport: {

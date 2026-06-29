@@ -11,6 +11,7 @@ import {
   IconRefresh,
   IconShield,
 } from "@/components/ui/icons";
+import { logInfo, logWarn } from "@/lib/observability/logger";
 import { GOOGLE_PHOTOS_SCOPE, useGoogleIdentity } from "./useGoogleIdentity";
 
 interface ConnectCardProps {
@@ -26,23 +27,43 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
     (accessToken, expiresInSeconds) => {
       setBusy(false);
       setError(null);
+      logInfo("auth.connected", {
+        component: "ConnectCard",
+        metadata: {
+          expiresInSeconds: expiresInSeconds ?? null,
+          scope: GOOGLE_PHOTOS_SCOPE,
+        },
+      });
       onAccessToken(accessToken, expiresInSeconds);
       toast.success("Connected to Google Photos for this browser session.");
     },
     (message) => {
       setBusy(false);
       setError(message);
+      logWarn("auth.connect_error", {
+        component: "ConnectCard",
+        message,
+        metadata: { ready, identityEnabled },
+      });
       toast.error(message);
     },
   );
 
   function connectPhotos() {
+    logInfo("auth.connect_clicked", {
+      component: "ConnectCard",
+      metadata: { connected, ready, identityEnabled },
+    });
     if (!identityEnabled) {
-      setError("Set VITE_GOOGLE_CLIENT_ID before connecting Google Photos.");
+      const message = "Set VITE_GOOGLE_CLIENT_ID before connecting Google Photos.";
+      setError(message);
+      logWarn("auth.client_id_missing", { component: "ConnectCard", message });
       return;
     }
     if (!ready) {
-      setError("Google Identity Services is still loading. Try again in a moment.");
+      const message = "Google Identity Services is still loading. Try again in a moment.";
+      setError(message);
+      logWarn("auth.identity_not_ready", { component: "ConnectCard", message });
       return;
     }
     setBusy(true);

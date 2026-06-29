@@ -1,6 +1,7 @@
 import { BlobReader, BlobWriter, ZipReader } from "@zip.js/zip.js";
 
 import type { JobResponse, JobStatus } from "@/features/jobs/types";
+import { logError, logInfo, logWarn } from "@/lib/observability/logger";
 import { createMediaItem, uploadMediaBytes } from "./googlePhotos";
 
 const DEDUPE_KEY = "snap-export-google-photos.browser-dedupe.v1";
@@ -82,8 +83,16 @@ function loadDedupe(): Set<string> {
     const raw = window.localStorage.getItem(DEDUPE_KEY);
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as string[];
+    logInfo("dedupe.loaded", {
+      component: "snapZipImport",
+      metadata: { entries: parsed.length },
+    });
     return new Set(parsed);
-  } catch {
+  } catch (error) {
+    logWarn("dedupe.load_failed", {
+      component: "snapZipImport",
+      message: error instanceof Error ? error.message : String(error),
+    });
     return new Set();
   }
 }
@@ -92,8 +101,15 @@ function saveDedupe(dedupe: Set<string>): void {
   try {
     const values = Array.from(dedupe);
     window.localStorage.setItem(DEDUPE_KEY, JSON.stringify(values.slice(-50000)));
-  } catch {
-    // Local storage can be unavailable in private browsing or full profiles.
+    logInfo("dedupe.saved", {
+      component: "snapZipImport",
+      metadata: { entries: values.length },
+    });
+  } catch (error) {
+    logWarn("dedupe.save_failed", {
+      component: "snapZipImport",
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -133,9 +149,20 @@ export async function runBrowserImport({
   onReportRow,
   shouldCancel,
 }: RunBrowserImportOptions): Promise<BrowserImportResult> {
+  const startedAt = performance.now();
   let job = makeJob(file);
   const reportRows: BrowserImportReportRow[] = [];
   const dedupe = loadDedupe();
+
+  logInfo("import.job_created", {
+    component: "snapZipImport",
+    metadata: {
+      jobId: job.job_id,
+      fileSize: file.size,
+      fileType: file.type || "unknown",
+      extension: extensionFor(file.name) || "none",
+    },
+  });
 
   const publish = (status?: JobStatus): void => {
     job = {
@@ -155,6 +182,10 @@ export async function runBrowserImport({
   publish("queued");
 
   if (file.size > 2 * 1024 * 1024 * 1024) {
+    logWarn("import.large_zip_selected", {
+      component: "snapZipImport",
+      metadata: { fileSize: file.size },
+    });
     report({
       path: file.name,
       status: "skipped",
@@ -179,12 +210,30 @@ export async function runBrowserImport({
         unsupported_count: fileEntries.length - supportedEntries.length,
       },
     };
+    logInfo("import.zip_scanned", {
+      component: "snapZipImport",
+      metadata: {
+        totalEntries: entries.length,
+        fileEntries: fileEntries.length,
+        supportedEntries: supportedEntries.length,
+        unsupportedEntries: fileEntries.length - supportedEntries.length,
+      },
+    });
+
     for (const entry of fileEntries) {
       if (!mimeFor(entry.filename)) {
+        const extension = extensionFor(entry.filename) || "none";
+        logWarn("import.unsupported_file_skipped", {
+          component: "snapZipImport",
+          metadata: {
+            extension,
+            bytes: entry.uncompressedSize ?? 0,
+          },
+        });
         report({
           path: entry.filename,
           status: "skipped",
-          message: `Unsupported file type: .${extensionFor(entry.filename) || "no extension"}`,
+          message: `Unsupported file type: .${extension}`,
           bytes: entry.uncompressedSize ?? 0,
         });
       }
@@ -192,21 +241,42 @@ export async function runBrowserImport({
     publish("uploading");
 
     if (supportedEntries.length === 0) {
+      logWarn("import.no_supported_media", {
+        component: "snapZipImport",
+        metadata: { totalDiscovered: fileEntries.length },
+      });
       publish("failed");
       return { job, reportRows };
     }
 
-    for (const entry of supportedEntries) {
+    for (const [index, entry] of supportedEntries.entries()) {
       if (shouldCancel?.()) {
+        logWarn("import.cancelled", {
+          component: "snapZipImport",
+          metadata: {
+            processed: index,
+            counters: job.counters,
+          },
+        });
         publish("cancelled");
         return { job, reportRows };
       }
 
       const fingerprint = fingerprintFor(entry);
       const size = entry.uncompressedSize ?? 0;
+      const extension = extensionFor(entry.filename) || "none";
       if (dedupe.has(fingerprint)) {
         job.counters.skipped_duplicates += 1;
         job.counters.bytes_processed += size;
+        logInfo("import.duplicate_skipped", {
+          component: "snapZipImport",
+          metadata: {
+            index: index + 1,
+            total: supportedEntries.length,
+            extension,
+            bytes: size,
+          },
+        });
         report({
           path: entry.filename,
           status: "skipped",
@@ -219,6 +289,17 @@ export async function runBrowserImport({
 
       try {
         const mime = mimeFor(entry.filename) || "application/octet-stream";
+        const itemStartedAt = performance.now();
+        logInfo("import.media_item_started", {
+          component: "snapZipImport",
+          metadata: {
+            index: index + 1,
+            total: supportedEntries.length,
+            extension,
+            mime,
+            bytes: size,
+          },
+        });
         const blob = await entry.getData?.(new BlobWriter(mime));
         if (!blob) {
           throw new Error("Could not extract ZIP entry in the browser.");
@@ -233,6 +314,17 @@ export async function runBrowserImport({
         job.counters.uploaded_count += 1;
         job.counters.created_count = (job.counters.created_count ?? 0) + 1;
         job.counters.bytes_processed += size;
+        logInfo("import.media_item_uploaded", {
+          component: "snapZipImport",
+          metadata: {
+            index: index + 1,
+            total: supportedEntries.length,
+            extension,
+            mime,
+            bytes: size,
+            durationMs: Math.round(performance.now() - itemStartedAt),
+          },
+        });
         report({
           path: entry.filename,
           status: "uploaded",
@@ -243,6 +335,15 @@ export async function runBrowserImport({
       } catch (error) {
         job.counters.failed_count += 1;
         job.counters.bytes_processed += size;
+        logError("import.media_item_failed", error, {
+          component: "snapZipImport",
+          metadata: {
+            index: index + 1,
+            total: supportedEntries.length,
+            extension,
+            bytes: size,
+          },
+        });
         report({
           path: entry.filename,
           status: "failed",
@@ -255,8 +356,29 @@ export async function runBrowserImport({
     }
 
     publish(terminalStatus(job.counters.failed_count, job.counters.uploaded_count, false));
+    logInfo("import.job_finished", {
+      component: "snapZipImport",
+      metadata: {
+        status: job.status,
+        counters: job.counters,
+        durationMs: Math.round(performance.now() - startedAt),
+      },
+    });
     return { job, reportRows };
+  } catch (error) {
+    logError("import.job_unhandled_error", error, {
+      component: "snapZipImport",
+      metadata: {
+        counters: job.counters,
+        durationMs: Math.round(performance.now() - startedAt),
+      },
+    });
+    throw error;
   } finally {
     await reader.close();
+    logInfo("import.zip_reader_closed", {
+      component: "snapZipImport",
+      metadata: { durationMs: Math.round(performance.now() - startedAt) },
+    });
   }
 }

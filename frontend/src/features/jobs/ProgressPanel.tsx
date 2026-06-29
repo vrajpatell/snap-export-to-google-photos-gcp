@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -16,9 +16,7 @@ import {
 import { StatusTimeline } from "@/components/StatusTimeline";
 import {
   formatBytes,
-  formatIsoTimestamp,
   formatRelativeTime,
-  truncateMiddle,
 } from "@/lib/format";
 import type { JobResponse } from "./types";
 import {
@@ -44,7 +42,6 @@ export function ProgressPanel({
   const pct = progressPercent(job.counters);
   const terminal = isTerminal(job.status);
 
-  // Re-render "Xs ago" label without external polling.
   const [, tick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => tick((n) => n + 1), 1000);
@@ -52,11 +49,11 @@ export function ProgressPanel({
   }, []);
 
   return (
-    <Card>
+    <Card className="motion-rise">
       <CardHeader
-        eyebrow="Step 3"
-        title="Browser import progress"
-        description="The import is running locally in this browser tab. Keep the tab open until it completes."
+        eyebrow="Importing"
+        title="Moving your memories"
+        description={terminal ? "Import finished. Review the summary below." : "Keep this tab open while your photos and videos are added."}
         actions={
           <Badge
             tone={STATUS_BADGE_TONE[job.status]}
@@ -67,63 +64,25 @@ export function ProgressPanel({
         }
       />
 
-      <div className="mb-5">
+      <div className="mb-6 rounded-3xl border border-white/60 bg-white/55 p-4 shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
         <StatusTimeline status={job.status} />
       </div>
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        <MetaChip
-          icon={<IconFile className="h-3.5 w-3.5" />}
-          label="Job"
-          value={
-            <code className="font-mono text-[11px]">
-              {truncateMiddle(job.job_id, 18)}
-            </code>
-          }
-        />
-        {job.created_at ? (
-          <MetaChip
-            icon={<IconClock className="h-3.5 w-3.5" />}
-            label="Started"
-            value={formatIsoTimestamp(job.created_at)}
-          />
-        ) : null}
-        {job.updated_at ? (
-          <MetaChip
-            icon={<IconRefresh className="h-3.5 w-3.5" />}
-            label="Updated"
-            value={formatIsoTimestamp(job.updated_at)}
-          />
-        ) : null}
-      </div>
+      <Progress
+        value={pct}
+        label={`${job.counters.uploaded_count.toLocaleString()} of ${job.counters.supported_files.toLocaleString()} files uploaded`}
+        tone={
+          job.status === "failed"
+            ? "danger"
+            : job.status === "partially_completed"
+              ? "warn"
+              : job.status === "completed"
+                ? "success"
+                : "brand"
+        }
+      />
 
-      {!terminal ? (
-        <Button
-          variant="secondary"
-          onClick={onCancelImport}
-          leading={<IconX className="h-4 w-4" />}
-        >
-          Cancel browser import
-        </Button>
-      ) : null}
-
-      <div className="mt-2">
-        <Progress
-          value={pct}
-          label={`${job.counters.uploaded_count.toLocaleString()} of ${job.counters.supported_files.toLocaleString()} supported files`}
-          tone={
-            job.status === "failed"
-              ? "danger"
-              : job.status === "partially_completed"
-                ? "warn"
-                : job.status === "completed"
-                  ? "success"
-                  : "brand"
-          }
-        />
-      </div>
-
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <StatTile
           label="Uploaded"
           value={job.counters.uploaded_count}
@@ -149,13 +108,13 @@ export function ProgressPanel({
           icon={<IconRefresh className="h-3.5 w-3.5" />}
         />
         <StatTile
-          label="Unsupported"
+          label="Skipped"
           value={job.counters.unsupported_count}
           tone="warn"
           icon={<IconAlert className="h-3.5 w-3.5" />}
         />
         <StatTile
-          label="Bytes Processed"
+          label="Moved"
           value={job.counters.bytes_processed}
           format={(n) => formatBytes(n)}
           tone="neutral"
@@ -163,35 +122,27 @@ export function ProgressPanel({
         />
       </div>
 
-      <p className="mt-4 text-xs text-ink-muted">
-        {terminal
-          ? "Import reached a terminal state. Download the local report before closing the tab."
-          : polling
-            ? `Processing locally · ${
-                lastUpdatedAt ? `last update ${formatRelativeTime(lastUpdatedAt)}` : "syncing…"
-              }`
-            : "Progress paused."}
-      </p>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-white/60 bg-white/55 px-4 py-3 text-sm text-ink-muted shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+        <span className="inline-flex items-center gap-2">
+          <IconClock className="h-4 w-4" />
+          {terminal
+            ? "Done"
+            : polling
+              ? lastUpdatedAt
+                ? `Updated ${formatRelativeTime(lastUpdatedAt)}`
+                : "Starting..."
+              : "Paused"}
+        </span>
+        {!terminal ? (
+          <Button
+            variant="secondary"
+            onClick={onCancelImport}
+            leading={<IconX className="h-4 w-4" />}
+          >
+            Stop import
+          </Button>
+        ) : null}
+      </div>
     </Card>
-  );
-}
-
-function MetaChip({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-}) {
-  return (
-    <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs">
-      <span className="text-ink-subtle" aria-hidden>
-        {icon}
-      </span>
-      <span className="text-ink-subtle">{label}:</span>
-      <span className="font-medium text-ink">{value}</span>
-    </div>
   );
 }

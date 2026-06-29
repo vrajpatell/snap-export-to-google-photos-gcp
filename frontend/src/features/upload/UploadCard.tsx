@@ -17,12 +17,12 @@ import { logInfo, logWarn } from "@/lib/observability/logger";
 import { useStagedUpload } from "./useStagedUpload";
 
 const PHASE_LABEL: Record<string, string> = {
-  idle: "Ready to validate",
-  preparing: "Checking ZIP archive...",
-  uploading: "Keeping file in your browser",
-  finalizing: "Preparing local import",
-  complete: "ZIP ready",
-  error: "Validation failed",
+  idle: "Ready",
+  preparing: "Checking archive...",
+  uploading: "Preparing files...",
+  finalizing: "Almost ready...",
+  complete: "Ready to import",
+  error: "Could not validate",
 };
 
 export interface UploadCardProps {
@@ -58,7 +58,7 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
     });
 
     if (phase === "complete") {
-      toast.success("Snapchat export validated locally.");
+      toast.success("ZIP looks good.");
       logInfo("upload.validation_complete", {
         component: "UploadCard",
         metadata: {
@@ -88,15 +88,15 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
   const complete = phase === "complete" && !!stagedPath;
 
   return (
-    <Card>
+    <Card className="motion-rise motion-rise-delay-2">
       <CardHeader
         eyebrow="Step 2"
-        title="Choose your Snapchat export"
-        description="Drag your exported .zip here. In free Vercel mode the archive stays in your browser; it is never staged in a cloud bucket."
+        title="Choose your export"
+        description="Select your Snapchat ZIP file."
         actions={
           complete ? (
             <Badge tone="success" leading={<IconCheck className="h-3.5 w-3.5" />}>
-              Ready to import
+              Checked
             </Badge>
           ) : null
         }
@@ -123,18 +123,18 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
           }
         }}
         disabled={disabled || uploading}
-        hint="ZIP processed locally in your browser"
+        hint="quick local check"
       />
 
       {file ? (
-        <div className="mt-4 space-y-3">
+        <div className="mt-5 space-y-4">
           <Progress
             value={progress * 100}
             label={PHASE_LABEL[phase]}
             indeterminate={indeterminate}
             tone={phase === "error" ? "danger" : complete ? "success" : "brand"}
           />
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             {complete ? (
               <>
                 <Button
@@ -151,10 +151,10 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
                   }}
                   leading={<IconX className="h-4 w-4" />}
                 >
-                  Replace file
+                  Choose another file
                 </Button>
-                <span className="text-xs text-ink-muted tabular">
-                  {formatBytes(file.size)} selected locally
+                <span className="text-sm text-ink-muted tabular">
+                  {formatBytes(file.size)} ready
                 </span>
               </>
             ) : phase === "error" ? (
@@ -169,7 +169,7 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
                 }}
                 leading={<IconRefresh className="h-4 w-4" />}
               >
-                Retry validation
+                Try again
               </Button>
             ) : (
               <Button
@@ -185,7 +185,7 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
                 disabled={disabled}
                 leading={<IconUpload className="h-4 w-4" />}
               >
-                {uploading ? "Checking..." : "Validate ZIP locally"}
+                {uploading ? "Checking..." : "Check ZIP"}
               </Button>
             )}
           </div>

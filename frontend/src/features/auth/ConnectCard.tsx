@@ -55,7 +55,7 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
       metadata: { connected, ready, identityEnabled },
     });
     if (!identityEnabled) {
-      const message = "Google sign-in is not configured yet.";
+      const message = "Google sign-in is not ready yet.";
       setError(message);
       logWarn("auth.client_id_missing", { component: "ConnectCard", message });
       return;
@@ -72,11 +72,11 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
   }
 
   return (
-    <Card className="motion-rise motion-rise-delay-1">
+    <Card className="motion-rise motion-rise-delay-1 shine">
       <CardHeader
         eyebrow="Step 1"
         title="Connect Google Photos"
-        description="Sign in so your selected memories can be added to your Google Photos library."
+        description="Sign in once and choose where your memories go."
         actions={
           connected ? (
             <Badge tone="success" leading={<IconCheck className="h-3.5 w-3.5" />}>
@@ -86,14 +86,24 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
         }
       />
 
-      <div className="mb-5 grid gap-3 rounded-3xl border border-white/60 bg-white/60 p-4 text-sm text-ink-muted shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-white/5 sm:grid-cols-2">
-        <div className="flex items-center gap-2">
-          <IconShield className="h-4 w-4 text-success" />
-          <span>Private by design</span>
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <div className="memory-tile flex items-center gap-3 p-4">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-success-soft text-success">
+            <IconShield className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-sm font-bold text-ink">Private flow</p>
+            <p className="text-xs text-ink-muted">Your account, your library</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <IconCloud className="h-4 w-4 text-brand-600 dark:text-brand-300" />
-          <span>Uploads to your account</span>
+        <div className="memory-tile flex items-center gap-3 p-4">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+            <IconCloud className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-sm font-bold text-ink">Direct upload</p>
+            <p className="text-xs text-ink-muted">No extra setup</p>
+          </div>
         </div>
       </div>
 
@@ -106,7 +116,7 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
           leading={<IconCloud className="h-4 w-4" />}
           trailing={!connected ? <IconLink className="h-4 w-4" /> : undefined}
         >
-          {connected ? "Reconnect Google Photos" : "Connect Google Photos"}
+          {connected ? "Reconnect" : "Connect Google Photos"}
         </Button>
         {connected ? (
           <Button

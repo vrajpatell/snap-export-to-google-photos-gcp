@@ -22,9 +22,9 @@ export function CompletionCard({
 }) {
   const { tone, title, message } = summarize(job);
   return (
-    <Card>
+    <Card className="motion-rise motion-rise-delay-1">
       <CardHeader
-        eyebrow="Summary"
+        eyebrow="Finished"
         title={title}
         description={message}
         actions={
@@ -39,17 +39,17 @@ export function CompletionCard({
           variant="secondary"
           fullWidth
           leading={<IconDownload className="h-4 w-4" />}
-          onClick={onDownloadJson}
-        >
-          Download JSON report
-        </Button>
-        <Button
-          variant="secondary"
-          fullWidth
-          leading={<IconDownload className="h-4 w-4" />}
           onClick={onDownloadCsv}
         >
-          Download CSV report
+          Download report
+        </Button>
+        <Button
+          variant="ghost"
+          fullWidth
+          leading={<IconDownload className="h-4 w-4" />}
+          onClick={onDownloadJson}
+        >
+          Full details
         </Button>
         <Button
           variant="primary"
@@ -57,7 +57,7 @@ export function CompletionCard({
           onClick={onStartNew}
           leading={<IconRefresh className="h-4 w-4" />}
         >
-          Start a new import
+          Import another ZIP
         </Button>
       </div>
     </Card>

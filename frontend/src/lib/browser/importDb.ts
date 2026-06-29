@@ -52,7 +52,7 @@ async function tx<T>(store: Store, _mode: IDBTransactionMode, run: (s: IDBObject
       get: (key: string) => ({ result: m.get(key) } as IDBRequest<T>),
       getAll: () => ({ result: Array.from(m.values()) } as IDBRequest<T>),
       delete: (key: string) => { m.delete(key); return { result: undefined } as IDBRequest<T>; },
-    } as IDBObjectStore;
+    } as unknown as IDBObjectStore;
     const req = run(fake);
     return req && "result" in req ? req.result : undefined;
   }

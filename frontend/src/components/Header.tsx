@@ -10,18 +10,18 @@ export function Header({
   accountEmail?: string;
 }) {
   return (
-    <header className="motion-rise mb-10 flex items-center justify-between gap-4 rounded-full border border-white/60 bg-white/55 px-4 py-3 shadow-soft backdrop-blur-2xl dark:border-white/10 dark:bg-surface-raised/55">
+    <header className="motion-rise mb-10 flex items-center justify-between gap-4 rounded-full border border-white/65 bg-white/62 px-4 py-3 shadow-soft backdrop-blur-2xl dark:border-white/10 dark:bg-white/5">
       <div className="flex items-center gap-3">
-        <div className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-indigo-500 text-white shadow-lift">
+        <div className="pulse-orb relative grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 via-indigo-500 to-pink-500 text-white shadow-lift">
           <span className="absolute inset-0 rounded-2xl bg-white/20 blur-sm" />
           <IconSparkles className="relative h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-black tracking-tight text-ink sm:text-base">
+          <p className="text-base font-black tracking-tight text-ink">
             Snap to Photos
           </p>
           <p className="hidden text-xs text-ink-subtle sm:block">
-            Private Snapchat export importer
+            Move memories in minutes
           </p>
         </div>
       </div>
@@ -31,7 +31,7 @@ export function Header({
             ? accountEmail
               ? `Connected · ${accountEmail}`
               : "Connected"
-            : "Not connected"}
+            : "Connect to start"}
         </Badge>
         <ThemeToggle />
       </div>

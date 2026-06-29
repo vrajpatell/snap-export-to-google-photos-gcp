@@ -37,7 +37,7 @@ const variants: Record<Variant, string> = {
 const sizes: Record<Size, string> = {
   sm: "h-9 px-3.5 text-[13px]",
   md: "h-11 px-5 text-sm",
-  lg: "h-13 px-6 py-3.5 text-[15px]",
+  lg: "min-h-[3.25rem] px-6 py-3.5 text-[15px]",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

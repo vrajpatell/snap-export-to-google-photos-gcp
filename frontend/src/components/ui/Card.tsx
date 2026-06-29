@@ -9,8 +9,7 @@ export function Card({
   return (
     <section
       className={cn(
-        "surface-card animate-fade-in p-6 sm:p-7",
-        "transition-shadow duration-200 ease-swift",
+        "surface-card interactive-card animate-fade-in p-6 sm:p-7",
         className,
       )}
       {...props}
@@ -33,17 +32,17 @@ export function CardHeader({
 }) {
   return (
     <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {eyebrow ? (
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-400">
+          <div className="inline-flex rounded-full border border-brand-200/70 bg-brand-50/80 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-brand-700 dark:border-brand-400/20 dark:bg-brand-500/10 dark:text-brand-200">
             {eyebrow}
           </div>
         ) : null}
-        <h2 className="text-lg font-semibold leading-tight text-ink sm:text-xl">
+        <h2 className="text-xl font-bold leading-tight tracking-tight text-ink sm:text-2xl">
           {title}
         </h2>
         {description ? (
-          <p className="max-w-prose text-sm text-ink-muted">{description}</p>
+          <p className="max-w-prose text-sm leading-6 text-ink-muted">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="shrink-0">{actions}</div> : null}

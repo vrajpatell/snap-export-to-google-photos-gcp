@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/Button";
@@ -354,7 +354,7 @@ function MiniStep({
   title,
   text,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   text: string;
 }) {

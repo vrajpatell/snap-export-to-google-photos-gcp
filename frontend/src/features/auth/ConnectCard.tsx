@@ -35,7 +35,7 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
         },
       });
       onAccessToken(accessToken, expiresInSeconds);
-      toast.success("Connected to Google Photos for this browser session.");
+      toast.success("Google Photos connected.");
     },
     (message) => {
       setBusy(false);
@@ -55,13 +55,13 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
       metadata: { connected, ready, identityEnabled },
     });
     if (!identityEnabled) {
-      const message = "Set VITE_GOOGLE_CLIENT_ID before connecting Google Photos.";
+      const message = "Google sign-in is not configured yet.";
       setError(message);
       logWarn("auth.client_id_missing", { component: "ConnectCard", message });
       return;
     }
     if (!ready) {
-      const message = "Google Identity Services is still loading. Try again in a moment.";
+      const message = "Google sign-in is loading. Try again in a moment.";
       setError(message);
       logWarn("auth.identity_not_ready", { component: "ConnectCard", message });
       return;
@@ -72,26 +72,29 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
   }
 
   return (
-    <Card>
+    <Card className="motion-rise motion-rise-delay-1">
       <CardHeader
         eyebrow="Step 1"
-        title="Connect your Google Photos account"
-        description="Grant one browser session access to upload directly to your own Google Photos library. No backend stores your tokens or files."
+        title="Connect Google Photos"
+        description="Sign in so your selected memories can be added to your Google Photos library."
         actions={
           connected ? (
             <Badge tone="success" leading={<IconCheck className="h-3.5 w-3.5" />}>
-              Connected
+              Ready
             </Badge>
           ) : null
         }
       />
 
-      <div className="mb-4 rounded-2xl border border-line bg-white/70 p-4 text-sm text-ink-muted">
-        <p>
-          This free Vercel mode uses Google Identity Services in the browser with the
-          <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">{GOOGLE_PHOTOS_SCOPE}</code>
-          scope. You may need to reconnect if the access token expires during a long import.
-        </p>
+      <div className="mb-5 grid gap-3 rounded-3xl border border-white/60 bg-white/60 p-4 text-sm text-ink-muted shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-white/5 sm:grid-cols-2">
+        <div className="flex items-center gap-2">
+          <IconShield className="h-4 w-4 text-success" />
+          <span>Private by design</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <IconCloud className="h-4 w-4 text-brand-600 dark:text-brand-300" />
+          <span>Uploads to your account</span>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -99,6 +102,7 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
           onClick={connectPhotos}
           loading={busy}
           disabled={connected && busy}
+          size="lg"
           leading={<IconCloud className="h-4 w-4" />}
           trailing={!connected ? <IconLink className="h-4 w-4" /> : undefined}
         >
@@ -106,24 +110,19 @@ export function ConnectCard({ connected, onAccessToken }: ConnectCardProps) {
         </Button>
         {connected ? (
           <Button
-            variant="ghost"
+            variant="secondary"
             onClick={connectPhotos}
             leading={<IconRefresh className="h-4 w-4" />}
           >
-            Refresh access token
+            Refresh access
           </Button>
         ) : null}
       </div>
 
-      <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-muted">
-        <IconShield className="h-3.5 w-3.5 text-success" aria-hidden />
-        Files stay on your device until your browser uploads each item directly to Google Photos.
-      </p>
-
       {error ? (
         <div
           role="alert"
-          className="mt-4 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
+          className="mt-5 flex items-start gap-2 rounded-2xl border border-danger/30 bg-danger-soft/80 px-4 py-3 text-sm text-danger"
         >
           <span>{error}</span>
           <Button

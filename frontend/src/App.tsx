@@ -21,6 +21,7 @@ import {
   runBrowserImport,
   type BrowserImportReportRow,
 } from "@/lib/browser/snapZipImport";
+import { logError, logInfo, logWarn } from "@/lib/observability/logger";
 import type { JobResponse } from "@/features/jobs/types";
 
 export default function App() {
@@ -34,28 +35,60 @@ export default function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [reportRows, setReportRows] = useState<BrowserImportReportRow[]>([]);
   const cancelRequestedRef = useRef(false);
+  const lastLoggedStatusRef = useRef<string | null>(null);
 
   const handleAccessToken = useCallback(
-    (token: string, expiresInSeconds?: number) => {
-      setAccessToken(token);
+    (_token: string, expiresInSeconds?: number) => {
+      setAccessToken(_token);
       setConnected(true);
       setAccessTokenExpiresAt(
         expiresInSeconds ? Date.now() + expiresInSeconds * 1000 : null,
       );
+      logInfo("auth.access_token_received", {
+        component: "App",
+        metadata: {
+          expiresInSeconds: expiresInSeconds ?? null,
+          hasExpiry: Boolean(expiresInSeconds),
+        },
+      });
     },
     [],
   );
 
   async function handleCreateAndStart() {
-    if (!selectedFile || !accessToken || creating) return;
+    if (!selectedFile || !accessToken || creating) {
+      logWarn("import.start_blocked", {
+        component: "App",
+        metadata: {
+          hasSelectedFile: Boolean(selectedFile),
+          hasAccessToken: Boolean(accessToken),
+          creating,
+        },
+      });
+      return;
+    }
     if (accessTokenExpiresAt && accessTokenExpiresAt - Date.now() < 60_000) {
+      logWarn("auth.token_expiring_before_import", {
+        component: "App",
+        metadata: { expiresInMs: accessTokenExpiresAt - Date.now() },
+      });
       toast.error("Your Google access token is about to expire. Refresh access first.");
       return;
     }
 
     cancelRequestedRef.current = false;
+    lastLoggedStatusRef.current = null;
     setCreating(true);
     setReportRows([]);
+    logInfo("import.started", {
+      component: "App",
+      metadata: {
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type || "unknown",
+        tokenExpiresInMs: accessTokenExpiresAt ? accessTokenExpiresAt - Date.now() : null,
+      },
+    });
+
     try {
       const result = await runBrowserImport({
         file: selectedFile,
@@ -63,6 +96,17 @@ export default function App() {
         onJob: (nextJob) => {
           setJob(nextJob);
           setLastUpdatedAt(Date.now());
+          const statusKey = `${nextJob.status}:${nextJob.counters.uploaded_count}:${nextJob.counters.failed_count}:${nextJob.counters.skipped_duplicates}`;
+          if (statusKey !== lastLoggedStatusRef.current) {
+            lastLoggedStatusRef.current = statusKey;
+            logInfo("import.progress", {
+              component: "App",
+              metadata: {
+                status: nextJob.status,
+                counters: nextJob.counters,
+              },
+            });
+          }
         },
         onReportRow: (row) => setReportRows((prev) => [...prev, row]),
         shouldCancel: () => cancelRequestedRef.current,
@@ -70,6 +114,14 @@ export default function App() {
       setJob(result.job);
       setReportRows(result.reportRows);
       setLastUpdatedAt(Date.now());
+      logInfo("import.finished", {
+        component: "App",
+        metadata: {
+          status: result.job.status,
+          counters: result.job.counters,
+          reportRows: result.reportRows.length,
+        },
+      });
       if (result.job.status === "completed") {
         toast.success("Import completed in your browser.");
       } else if (result.job.status === "partially_completed") {
@@ -81,18 +133,37 @@ export default function App() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      logError("import.failed", err, {
+        component: "App",
+        metadata: {
+          currentJobStatus: job?.status ?? null,
+          reportRows: reportRows.length,
+        },
+      });
       toast.error(message);
     } finally {
       setCreating(false);
+      logInfo("import.ui_unlocked", { component: "App" });
     }
   }
 
   function handleCancelImport() {
     cancelRequestedRef.current = true;
+    logWarn("import.cancel_requested", {
+      component: "App",
+      metadata: { currentJobStatus: job?.status ?? null },
+    });
     toast("Cancellation requested. The current Google Photos request will finish first.", { icon: "⏹️" });
   }
 
   function handleStartNew() {
+    logInfo("import.start_new", {
+      component: "App",
+      metadata: {
+        previousStatus: job?.status ?? null,
+        previousCounters: job?.counters ?? null,
+      },
+    });
     setJob(null);
     setStagedPath(null);
     setSelectedFile(null);
@@ -102,6 +173,10 @@ export default function App() {
 
   function downloadJsonReport() {
     if (!job) return;
+    logInfo("report.download_json", {
+      component: "App",
+      metadata: { status: job.status, rows: reportRows.length, counters: job.counters },
+    });
     downloadTextFile(
       `${job.job_id}.json`,
       buildJsonReport(job, reportRows),
@@ -111,6 +186,10 @@ export default function App() {
 
   function downloadCsvReport() {
     if (!job) return;
+    logInfo("report.download_csv", {
+      component: "App",
+      metadata: { status: job.status, rows: reportRows.length, counters: job.counters },
+    });
     downloadTextFile(
       `${job.job_id}.csv`,
       buildCsvReport(reportRows),

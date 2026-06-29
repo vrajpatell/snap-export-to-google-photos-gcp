@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/icons";
 import { Dropzone } from "@/components/Dropzone";
 import { formatBytes } from "@/lib/format";
+import { logInfo, logWarn } from "@/lib/observability/logger";
 import { useStagedUpload } from "./useStagedUpload";
 
 const PHASE_LABEL: Record<string, string> = {
@@ -30,6 +31,11 @@ export interface UploadCardProps {
   onFileReady: (file: File | null) => void;
 }
 
+function extensionFor(file: File): string {
+  const dotIndex = file.name.lastIndexOf(".");
+  return dotIndex === -1 ? "none" : file.name.slice(dotIndex + 1).toLowerCase();
+}
+
 export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardProps) {
   const [file, setFile] = useState<File | null>(null);
   const { phase, progress, stagedPath, error, upload, reset } = useStagedUpload();
@@ -39,14 +45,43 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
   }, [stagedPath, onStagedPath]);
 
   useEffect(() => {
+    logInfo("upload.phase_changed", {
+      component: "UploadCard",
+      metadata: {
+        phase,
+        progress,
+        hasFile: Boolean(file),
+        fileSize: file?.size ?? null,
+        fileType: file?.type || null,
+        extension: file ? extensionFor(file) : null,
+      },
+    });
+
     if (phase === "complete") {
       toast.success("Snapchat export validated locally.");
+      logInfo("upload.validation_complete", {
+        component: "UploadCard",
+        metadata: {
+          fileSize: file?.size ?? null,
+          fileType: file?.type || null,
+          extension: file ? extensionFor(file) : null,
+        },
+      });
       onFileReady(file);
     } else if (phase === "error" && error) {
       toast.error(error);
+      logWarn("upload.validation_error", {
+        component: "UploadCard",
+        message: error,
+        metadata: {
+          fileSize: file?.size ?? null,
+          fileType: file?.type || null,
+          extension: file ? extensionFor(file) : null,
+        },
+      });
       onFileReady(null);
     }
-  }, [phase, error, file, onFileReady]);
+  }, [phase, error, file, onFileReady, progress]);
 
   const uploading = phase === "preparing" || phase === "uploading" || phase === "finalizing";
   const indeterminate = phase === "preparing" || phase === "finalizing";
@@ -72,6 +107,16 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
         onSelect={(next) => {
           setFile(next);
           onFileReady(null);
+          logInfo("upload.file_selected", {
+            component: "UploadCard",
+            metadata: next
+              ? {
+                  fileSize: next.size,
+                  fileType: next.type || "unknown",
+                  extension: extensionFor(next),
+                }
+              : { cleared: true },
+          });
           if (!next) {
             reset();
             onStagedPath(null);
@@ -95,6 +140,10 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
                 <Button
                   variant="secondary"
                   onClick={() => {
+                    logInfo("upload.replace_file_clicked", {
+                      component: "UploadCard",
+                      metadata: { fileSize: file.size, extension: extensionFor(file) },
+                    });
                     setFile(null);
                     reset();
                     onStagedPath(null);
@@ -111,7 +160,13 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
             ) : phase === "error" ? (
               <Button
                 variant="primary"
-                onClick={() => upload(file)}
+                onClick={() => {
+                  logInfo("upload.retry_validation_clicked", {
+                    component: "UploadCard",
+                    metadata: { fileSize: file.size, extension: extensionFor(file) },
+                  });
+                  void upload(file);
+                }}
                 leading={<IconRefresh className="h-4 w-4" />}
               >
                 Retry validation
@@ -119,7 +174,13 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
             ) : (
               <Button
                 variant="primary"
-                onClick={() => upload(file)}
+                onClick={() => {
+                  logInfo("upload.validate_clicked", {
+                    component: "UploadCard",
+                    metadata: { fileSize: file.size, extension: extensionFor(file) },
+                  });
+                  void upload(file);
+                }}
                 loading={uploading}
                 disabled={disabled}
                 leading={<IconUpload className="h-4 w-4" />}

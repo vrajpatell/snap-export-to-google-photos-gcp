@@ -22,7 +22,7 @@ function validate(file: File): string | null {
     file.name.toLowerCase().endsWith(ext),
   );
   if (!hasExt && !ACCEPTED_MIME.has(file.type)) {
-    return "Please select a .zip file exported from Snapchat.";
+    return "Please select a Snapchat .zip export.";
   }
   if (file.size <= 0) return "That file appears to be empty.";
   return null;
@@ -65,29 +65,30 @@ export function Dropzone({ file, onSelect, disabled, hint }: DropzoneProps) {
           handleFiles(e.dataTransfer.files);
         }}
         className={cn(
-          "group relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-all duration-200 ease-swift",
+          "group relative flex cursor-pointer flex-col items-center justify-center gap-4 overflow-hidden rounded-[1.75rem] border border-dashed px-6 py-12 text-center transition-all duration-300 ease-swift",
+          "before:absolute before:inset-0 before:bg-gradient-to-br before:from-brand-400/10 before:via-transparent before:to-indigo-400/10 before:opacity-0 before:transition-opacity before:duration-300",
           dragActive
-            ? "border-brand-500 bg-brand-50/70 shadow-lift dark:bg-brand-500/10"
-            : "border-border bg-surface/60 hover:border-brand-400 hover:bg-surface",
+            ? "border-brand-400 bg-brand-50/80 shadow-lift before:opacity-100 dark:bg-brand-500/10"
+            : "border-border bg-white/50 hover:-translate-y-0.5 hover:border-brand-300 hover:bg-white/70 hover:shadow-soft dark:bg-white/5 dark:hover:bg-white/10",
           disabled && "pointer-events-none opacity-60",
         )}
       >
         <div
           className={cn(
-            "grid h-12 w-12 place-items-center rounded-2xl transition-colors duration-200",
+            "relative z-10 grid h-16 w-16 place-items-center rounded-3xl transition-all duration-300",
             dragActive
-              ? "bg-brand-600 text-white"
-              : "bg-brand-50 text-brand-600 group-hover:bg-brand-100 dark:text-brand-300",
+              ? "scale-110 bg-brand-600 text-white shadow-lift"
+              : "bg-gradient-to-br from-brand-50 to-white text-brand-600 shadow-soft group-hover:scale-105 dark:from-brand-500/20 dark:to-white/10 dark:text-brand-300",
           )}
         >
-          <IconUpload className="h-5 w-5" />
+          <IconUpload className="h-7 w-7" />
         </div>
-        <div>
-          <p className="text-sm font-medium text-ink">
-            {dragActive ? "Drop to select" : "Drop your Snapchat export ZIP"}
+        <div className="relative z-10">
+          <p className="text-base font-bold text-ink sm:text-lg">
+            {dragActive ? "Drop it here" : "Drop your Snapchat ZIP"}
           </p>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            or <span className="text-brand-600 dark:text-brand-300">click to browse</span>
+          <p className="mt-1 text-sm text-ink-muted">
+            or <span className="font-semibold text-brand-700 dark:text-brand-300">click to browse</span>
             {hint ? ` · ${hint}` : ""}
           </p>
         </div>
@@ -103,23 +104,23 @@ export function Dropzone({ file, onSelect, disabled, hint }: DropzoneProps) {
       </label>
 
       {error ? (
-        <p className="mt-2 text-xs text-danger" role="alert">
+        <p className="mt-3 text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}
 
       {file ? (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-600 dark:text-brand-300">
-              <IconFile className="h-4 w-4" />
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/75 px-4 py-3 shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+              <IconFile className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-ink">
+              <p className="truncate text-sm font-semibold text-ink">
                 {file.name}
               </p>
               <p className="text-xs text-ink-muted tabular">
-                {formatBytes(file.size)}
+                {formatBytes(file.size)} selected
               </p>
             </div>
           </div>
@@ -127,7 +128,7 @@ export function Dropzone({ file, onSelect, disabled, hint }: DropzoneProps) {
             type="button"
             onClick={() => onSelect(null)}
             aria-label="Remove file"
-            className="rounded-lg p-1.5 text-ink-subtle hover:bg-surface-sunken hover:text-ink"
+            className="rounded-xl p-2 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
           >
             <IconX className="h-4 w-4" />
           </button>

@@ -6,6 +6,7 @@ const BATCH_CREATE_ENDPOINT =
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 4;
+const RESUMABLE_CHUNK_SIZE = 8 * 1024 * 1024;
 
 export class GooglePhotosBrowserError extends Error {
   constructor(
@@ -27,6 +28,10 @@ async function responseText(response: Response): Promise<string> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+export function isGooglePhotosRetryableStatus(status?: number): boolean {
+  return status == null || RETRYABLE_STATUSES.has(status);
 }
 
 function retryDelayMs(attempt: number, response?: Response): number {
@@ -156,6 +161,68 @@ export async function uploadMediaBytes(
     },
   });
   return token;
+}
+
+
+export async function uploadMediaBytesResumable(
+  accessToken: string,
+  blob: Blob,
+  filename: string,
+  options: { contentType?: string; onProgress?: (uploadedBytes: number, totalBytes: number) => void; signal?: AbortSignal } = {},
+): Promise<string> {
+  const contentType = options.contentType || blob.type || "application/octet-stream";
+  logInfo("upload.resumable_started", { component: "googlePhotos", metadata: { bytes: blob.size, contentType } });
+  const startResponse = await fetchWithRetry(UPLOAD_ENDPOINT, {
+    method: "POST",
+    signal: options.signal,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(blob.size),
+      "X-Goog-Upload-Header-Content-Type": contentType,
+      "X-Goog-Upload-File-Name": filename,
+      "Content-Type": "application/octet-stream",
+    },
+  }, "resumableStart");
+  if (!startResponse.ok) {
+    const body = await responseText(startResponse);
+    throw new GooglePhotosBrowserError(buildErrorMessage("Start resumable upload", startResponse, body), startResponse.status);
+  }
+  const uploadUrl = startResponse.headers.get("X-Goog-Upload-URL");
+  if (!uploadUrl) throw new GooglePhotosBrowserError("Google Photos did not return a resumable upload URL.");
+
+  let offset = 0;
+  while (offset < blob.size) {
+    const end = Math.min(offset + RESUMABLE_CHUNK_SIZE, blob.size);
+    const isFinal = end >= blob.size;
+    const response = await fetchWithRetry(uploadUrl, {
+      method: "POST",
+      signal: options.signal,
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Goog-Upload-Command": isFinal ? "upload, finalize" : "upload",
+        "X-Goog-Upload-Offset": String(offset),
+      },
+      body: blob.slice(offset, end, contentType),
+    }, "resumableUpload");
+    if (!response.ok) {
+      const body = await responseText(response);
+      throw new GooglePhotosBrowserError(buildErrorMessage("Resumable upload", response, body), response.status);
+    }
+    offset = end;
+    options.onProgress?.(offset, blob.size);
+    logInfo("upload.resumable_progress", { component: "googlePhotos", metadata: { uploadedBytes: offset, totalBytes: blob.size } });
+    if (isFinal) {
+      const token = (await response.text()).trim();
+      if (!token) throw new GooglePhotosBrowserError("Google Photos returned an empty upload token after resumable upload.");
+      logInfo("upload.resumable_finished", { component: "googlePhotos", metadata: { bytes: blob.size, contentType } });
+      return token;
+    } else {
+      await response.body?.cancel();
+    }
+  }
+  throw new GooglePhotosBrowserError("Resumable upload finished without an upload token.");
 }
 
 interface BatchCreateResponse {

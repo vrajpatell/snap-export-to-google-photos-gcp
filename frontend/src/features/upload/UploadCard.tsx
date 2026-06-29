@@ -92,7 +92,7 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
       <CardHeader
         eyebrow="Step 2"
         title="Choose your export"
-        description="Select your Snapchat ZIP file."
+        description="Upload the ZIP you downloaded from Snapchat."
         actions={
           complete ? (
             <Badge tone="success" leading={<IconCheck className="h-3.5 w-3.5" />}>
@@ -123,7 +123,7 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
           }
         }}
         disabled={disabled || uploading}
-        hint="quick local check"
+        hint="we’ll scan it first"
       />
 
       {file ? (
@@ -151,7 +151,7 @@ export function UploadCard({ disabled, onStagedPath, onFileReady }: UploadCardPr
                   }}
                   leading={<IconX className="h-4 w-4" />}
                 >
-                  Choose another file
+                  Choose another
                 </Button>
                 <span className="text-sm text-ink-muted tabular">
                   {formatBytes(file.size)} ready

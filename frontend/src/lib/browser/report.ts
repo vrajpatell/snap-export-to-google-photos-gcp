@@ -10,9 +10,9 @@ function csvEscape(value: unknown): string {
 }
 
 export function buildCsvReport(rows: BrowserImportReportRow[]): string {
-  const header = ["path", "status", "message", "mediaItemId", "productUrl", "bytes"];
+  const header = ["path", "filename", "extension", "bytes", "detectedMime", "sha256", "status", "duplicate", "uploadMode", "attempts", "qualityWarnings", "exifDate", "width", "height", "mediaItemId", "productUrl", "message", "retryable"];
   const lines = rows.map((row) =>
-    [row.path, row.status, row.message, row.mediaItemId, row.productUrl, row.bytes]
+    [row.path, row.filename, row.extension, row.bytes, row.detectedMime, row.sha256, row.status, row.duplicate ? "yes" : "no", row.uploadMode, row.attempts, row.qualityWarnings?.join("; "), row.exifDate, row.width, row.height, row.mediaItemId, row.productUrl, row.message, row.retryable == null ? "" : row.retryable ? "yes" : "no"]
       .map(csvEscape)
       .join(","),
   );

@@ -1,3 +1,5 @@
+import { logError, logInfo, logWarn } from "@/lib/observability/logger";
+
 const UPLOAD_ENDPOINT = "https://photoslibrary.googleapis.com/v1/uploads";
 const BATCH_CREATE_ENDPOINT =
   "https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate";
@@ -55,16 +57,39 @@ function buildErrorMessage(action: string, response: Response, body: string): st
   return `${action} failed with ${response.status} ${response.statusText}${detail}`;
 }
 
-async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, action: string): Promise<Response> {
   let lastResponse: Response | undefined;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    const startedAt = performance.now();
     const response = await fetch(input, init);
+    const durationMs = Math.round(performance.now() - startedAt);
+    logInfo("google_photos.request_finished", {
+      component: "googlePhotos",
+      metadata: {
+        action,
+        status: response.status,
+        ok: response.ok,
+        attempt,
+        durationMs,
+      },
+    });
     if (response.ok || !RETRYABLE_STATUSES.has(response.status) || attempt === MAX_RETRIES) {
       return response;
     }
     lastResponse = response;
+    const delayMs = retryDelayMs(attempt, response);
+    logWarn("google_photos.request_retrying", {
+      component: "googlePhotos",
+      metadata: {
+        action,
+        status: response.status,
+        attempt,
+        nextAttempt: attempt + 1,
+        delayMs,
+      },
+    });
     await response.body?.cancel();
-    await sleep(retryDelayMs(attempt, response));
+    await sleep(delayMs);
   }
   return lastResponse as Response;
 }
@@ -74,6 +99,14 @@ export async function uploadMediaBytes(
   blob: Blob,
   filename: string,
 ): Promise<string> {
+  logInfo("google_photos.upload_started", {
+    component: "googlePhotos",
+    metadata: {
+      bytes: blob.size,
+      contentType: blob.type || "application/octet-stream",
+    },
+  });
+
   const response = await fetchWithRetry(UPLOAD_ENDPOINT, {
     method: "POST",
     headers: {
@@ -84,20 +117,44 @@ export async function uploadMediaBytes(
       "X-Goog-Upload-Protocol": "raw",
     },
     body: blob,
-  });
+  }, "upload");
 
   if (!response.ok) {
     const body = await responseText(response);
-    throw new GooglePhotosBrowserError(
+    const error = new GooglePhotosBrowserError(
       buildErrorMessage("Upload", response, body),
       response.status,
     );
+    logError("google_photos.upload_failed", error, {
+      component: "googlePhotos",
+      metadata: {
+        status: response.status,
+        bytes: blob.size,
+        contentType: blob.type || "application/octet-stream",
+      },
+    });
+    throw error;
   }
 
   const token = (await response.text()).trim();
   if (!token) {
-    throw new GooglePhotosBrowserError("Google Photos returned an empty upload token");
+    const error = new GooglePhotosBrowserError("Google Photos returned an empty upload token");
+    logError("google_photos.empty_upload_token", error, {
+      component: "googlePhotos",
+      metadata: {
+        bytes: blob.size,
+        contentType: blob.type || "application/octet-stream",
+      },
+    });
+    throw error;
   }
+  logInfo("google_photos.upload_succeeded", {
+    component: "googlePhotos",
+    metadata: {
+      bytes: blob.size,
+      contentType: blob.type || "application/octet-stream",
+    },
+  });
   return token;
 }
 
@@ -122,8 +179,18 @@ export async function createMediaItems(
   items: Array<{ uploadToken: string; filename: string }>,
 ): Promise<Array<{ uploadToken: string; mediaItemId?: string; productUrl?: string; error?: string }>> {
   if (items.length > 50) {
-    throw new GooglePhotosBrowserError("Google Photos batchCreate supports at most 50 items per request.");
+    const error = new GooglePhotosBrowserError("Google Photos batchCreate supports at most 50 items per request.");
+    logError("google_photos.batch_create_too_large", error, {
+      component: "googlePhotos",
+      metadata: { itemCount: items.length },
+    });
+    throw error;
   }
+
+  logInfo("google_photos.batch_create_started", {
+    component: "googlePhotos",
+    metadata: { itemCount: items.length },
+  });
 
   const response = await enqueueBatchCreate(() => fetchWithRetry(BATCH_CREATE_ENDPOINT, {
     method: "POST",
@@ -139,18 +206,26 @@ export async function createMediaItems(
         },
       })),
     }),
-  }));
+  }, "batchCreate"));
 
   const body = await responseText(response);
   if (!response.ok) {
-    throw new GooglePhotosBrowserError(
+    const error = new GooglePhotosBrowserError(
       buildErrorMessage("Create media items", response, body),
       response.status,
     );
+    logError("google_photos.batch_create_failed", error, {
+      component: "googlePhotos",
+      metadata: {
+        status: response.status,
+        itemCount: items.length,
+      },
+    });
+    throw error;
   }
 
   const parsed = JSON.parse(body || "{}") as BatchCreateResponse;
-  return items.map((item, index) => {
+  const results = items.map((item, index) => {
     const result = parsed.newMediaItemResults?.[index];
     const code = result?.status?.code ?? 0;
     if (code !== 0) {
@@ -165,6 +240,17 @@ export async function createMediaItems(
       productUrl: result?.mediaItem?.productUrl,
     };
   });
+
+  logInfo("google_photos.batch_create_finished", {
+    component: "googlePhotos",
+    metadata: {
+      itemCount: items.length,
+      accepted: results.filter((result) => !result.error).length,
+      rejected: results.filter((result) => Boolean(result.error)).length,
+    },
+  });
+
+  return results;
 }
 
 export async function createMediaItem(
@@ -176,7 +262,11 @@ export async function createMediaItem(
     { uploadToken, filename },
   ]);
   if (result.error) {
-    throw new GooglePhotosBrowserError(result.error);
+    const error = new GooglePhotosBrowserError(result.error);
+    logError("google_photos.create_media_item_rejected", error, {
+      component: "googlePhotos",
+    });
+    throw error;
   }
   return { mediaItemId: result.mediaItemId, productUrl: result.productUrl };
 }

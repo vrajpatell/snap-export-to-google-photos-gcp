@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "cd frontend && npm view vite version --json && npm view vitest version --json && npm view @vitejs/plugin-react version peerDependencies --json && npm install && (npm audit --json || true)",
+  "installCommand": "cd frontend && npm install && npm audit --audit-level=moderate",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]

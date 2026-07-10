@@ -5,8 +5,9 @@ const BATCH_CREATE_ENDPOINT =
   "https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate";
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
-const MAX_RETRIES = 4;
-const RESUMABLE_CHUNK_SIZE = 8 * 1024 * 1024;
+const MAX_ATTEMPTS = 5;
+const TARGET_CHUNK_SIZE = 8 * 1024 * 1024;
+const MIN_RATE_LIMIT_DELAY_MS = 30_000;
 
 export class GooglePhotosBrowserError extends Error {
   constructor(
@@ -34,69 +35,86 @@ export function isGooglePhotosRetryableStatus(status?: number): boolean {
   return status == null || RETRYABLE_STATUSES.has(status);
 }
 
-function retryDelayMs(attempt: number, response?: Response): number {
+export function retryDelayMs(attempt: number, response?: Response): number {
   const retryAfter = response?.headers.get("Retry-After");
   const retryAfterSeconds = retryAfter ? Number(retryAfter) : Number.NaN;
   if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
-    return retryAfterSeconds * 1000;
+    return Math.max(
+      response?.status === 429 ? MIN_RATE_LIMIT_DELAY_MS : 0,
+      retryAfterSeconds * 1000,
+    );
   }
-  const base = 750 * 2 ** attempt;
-  const jitter = Math.floor(Math.random() * 300);
-  return base + jitter;
+  if (response?.status === 429) {
+    return MIN_RATE_LIMIT_DELAY_MS + Math.floor(Math.random() * 1000);
+  }
+  return 750 * 2 ** attempt + Math.floor(Math.random() * 300);
 }
 
 function buildErrorMessage(action: string, response: Response, body: string): string {
   if (response.status === 401) {
-    return `${action} failed with 401 Unauthorized. Refresh your Google access token, then retry the failed items from the downloaded report.`;
+    return `${action} failed with 401 Unauthorized. Reconnect Google Photos and retry.`;
   }
   if (response.status === 403) {
-    return `${action} failed with 403 Forbidden. Confirm the Google Photos Library API is enabled, the OAuth origin is authorized, and the app was granted the upload scope.`;
+    return `${action} failed with 403 Forbidden. Confirm the Photos Library API, OAuth origin, and upload scope.`;
   }
   if (response.status === 429) {
-    return `${action} failed with 429 rate limiting after retries. Wait a few minutes, keep the report, and retry later.`;
+    return `${action} failed with 429 rate limiting after retries. Retry later using the saved import session.`;
   }
   if (response.status >= 500) {
-    return `${action} failed because Google Photos returned ${response.status}. This is usually temporary; retry later.`;
+    return `${action} failed because Google Photos returned ${response.status}. This is usually temporary.`;
   }
-  const detail = body ? `: ${body}` : "";
-  return `${action} failed with ${response.status} ${response.statusText}${detail}`;
+  return `${action} failed with ${response.status} ${response.statusText}${body ? `: ${body}` : ""}`;
 }
 
-async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, action: string): Promise<Response> {
+async function fetchWithRetry(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  action: string,
+): Promise<Response> {
   let lastResponse: Response | undefined;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
-    const startedAt = performance.now();
-    const response = await fetch(input, init);
-    const durationMs = Math.round(performance.now() - startedAt);
-    logInfo("google_photos.request_finished", {
-      component: "googlePhotos",
-      metadata: {
-        action,
-        status: response.status,
-        ok: response.ok,
-        attempt,
-        durationMs,
-      },
-    });
-    if (response.ok || !RETRYABLE_STATUSES.has(response.status) || attempt === MAX_RETRIES) {
-      return response;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const startedAt = performance.now();
+      const response = await fetch(input, init);
+      logInfo("google_photos.request_finished", {
+        component: "googlePhotos",
+        metadata: {
+          action,
+          status: response.status,
+          ok: response.ok,
+          attempt,
+          durationMs: Math.round(performance.now() - startedAt),
+        },
+      });
+
+      if (response.ok || !RETRYABLE_STATUSES.has(response.status) || attempt === MAX_ATTEMPTS - 1) {
+        return response;
+      }
+
+      lastResponse = response;
+      const delayMs = retryDelayMs(attempt, response);
+      logWarn("google_photos.request_retrying", {
+        component: "googlePhotos",
+        metadata: { action, status: response.status, attempt, delayMs },
+      });
+      await response.body?.cancel();
+      await sleep(delayMs);
+    } catch (error) {
+      lastError = error;
+      if (init.signal?.aborted || attempt === MAX_ATTEMPTS - 1) throw error;
+      const delayMs = retryDelayMs(attempt);
+      logWarn("google_photos.network_retrying", {
+        component: "googlePhotos",
+        metadata: { action, attempt, delayMs },
+      });
+      await sleep(delayMs);
     }
-    lastResponse = response;
-    const delayMs = retryDelayMs(attempt, response);
-    logWarn("google_photos.request_retrying", {
-      component: "googlePhotos",
-      metadata: {
-        action,
-        status: response.status,
-        attempt,
-        nextAttempt: attempt + 1,
-        delayMs,
-      },
-    });
-    await response.body?.cancel();
-    await sleep(delayMs);
   }
-  return lastResponse as Response;
+
+  if (lastResponse) return lastResponse;
+  throw lastError instanceof Error ? lastError : new Error(`${action} failed`);
 }
 
 export async function uploadMediaBytes(
@@ -104,25 +122,21 @@ export async function uploadMediaBytes(
   blob: Blob,
   filename: string,
 ): Promise<string> {
-  logInfo("google_photos.upload_started", {
-    component: "googlePhotos",
-    metadata: {
-      bytes: blob.size,
-      contentType: blob.type || "application/octet-stream",
+  const response = await fetchWithRetry(
+    UPLOAD_ENDPOINT,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/octet-stream",
+        "X-Goog-Upload-Content-Type": blob.type || "application/octet-stream",
+        "X-Goog-Upload-File-Name": filename,
+        "X-Goog-Upload-Protocol": "raw",
+      },
+      body: blob,
     },
-  });
-
-  const response = await fetchWithRetry(UPLOAD_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/octet-stream",
-      "X-Goog-Upload-Content-Type": blob.type || "application/octet-stream",
-      "X-Goog-Upload-File-Name": filename,
-      "X-Goog-Upload-Protocol": "raw",
-    },
-    body: blob,
-  }, "upload");
+    "upload",
+  );
 
   if (!response.ok) {
     const body = await responseText(response);
@@ -132,96 +146,145 @@ export async function uploadMediaBytes(
     );
     logError("google_photos.upload_failed", error, {
       component: "googlePhotos",
-      metadata: {
-        status: response.status,
-        bytes: blob.size,
-        contentType: blob.type || "application/octet-stream",
-      },
+      metadata: { status: response.status, bytes: blob.size },
     });
     throw error;
   }
 
   const token = (await response.text()).trim();
-  if (!token) {
-    const error = new GooglePhotosBrowserError("Google Photos returned an empty upload token");
-    logError("google_photos.empty_upload_token", error, {
-      component: "googlePhotos",
-      metadata: {
-        bytes: blob.size,
-        contentType: blob.type || "application/octet-stream",
-      },
-    });
-    throw error;
-  }
-  logInfo("google_photos.upload_succeeded", {
-    component: "googlePhotos",
-    metadata: {
-      bytes: blob.size,
-      contentType: blob.type || "application/octet-stream",
-    },
-  });
+  if (!token) throw new GooglePhotosBrowserError("Google Photos returned an empty upload token.");
   return token;
 }
 
+function normalizedChunkSize(granularity: number): number {
+  if (!Number.isFinite(granularity) || granularity <= 0) return TARGET_CHUNK_SIZE;
+  return Math.max(granularity, Math.floor(TARGET_CHUNK_SIZE / granularity) * granularity);
+}
+
+async function queryResumableOffset(uploadUrl: string, signal?: AbortSignal): Promise<number> {
+  const response = await fetchWithRetry(
+    uploadUrl,
+    {
+      method: "POST",
+      signal,
+      headers: { "X-Goog-Upload-Command": "query" },
+    },
+    "resumableQuery",
+  );
+  if (!response.ok) {
+    const body = await responseText(response);
+    throw new GooglePhotosBrowserError(
+      buildErrorMessage("Query resumable upload", response, body),
+      response.status,
+    );
+  }
+  const received = Number(response.headers.get("X-Goog-Upload-Size-Received") ?? "0");
+  return Number.isFinite(received) && received >= 0 ? received : 0;
+}
 
 export async function uploadMediaBytesResumable(
   accessToken: string,
   blob: Blob,
   filename: string,
-  options: { contentType?: string; onProgress?: (uploadedBytes: number, totalBytes: number) => void; signal?: AbortSignal } = {},
+  options: {
+    contentType?: string;
+    onProgress?: (uploadedBytes: number, totalBytes: number) => void;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<string> {
   const contentType = options.contentType || blob.type || "application/octet-stream";
-  logInfo("upload.resumable_started", { component: "googlePhotos", metadata: { bytes: blob.size, contentType } });
-  const startResponse = await fetchWithRetry(UPLOAD_ENDPOINT, {
-    method: "POST",
-    signal: options.signal,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "X-Goog-Upload-Protocol": "resumable",
-      "X-Goog-Upload-Command": "start",
-      "X-Goog-Upload-Header-Content-Length": String(blob.size),
-      "X-Goog-Upload-Header-Content-Type": contentType,
-      "X-Goog-Upload-File-Name": filename,
-      "Content-Type": "application/octet-stream",
-    },
-  }, "resumableStart");
-  if (!startResponse.ok) {
-    const body = await responseText(startResponse);
-    throw new GooglePhotosBrowserError(buildErrorMessage("Start resumable upload", startResponse, body), startResponse.status);
-  }
-  const uploadUrl = startResponse.headers.get("X-Goog-Upload-URL");
-  if (!uploadUrl) throw new GooglePhotosBrowserError("Google Photos did not return a resumable upload URL.");
-
-  let offset = 0;
-  while (offset < blob.size) {
-    const end = Math.min(offset + RESUMABLE_CHUNK_SIZE, blob.size);
-    const isFinal = end >= blob.size;
-    const response = await fetchWithRetry(uploadUrl, {
+  const startResponse = await fetchWithRetry(
+    UPLOAD_ENDPOINT,
+    {
       method: "POST",
       signal: options.signal,
       headers: {
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/octet-stream",
-        "X-Goog-Upload-Command": isFinal ? "upload, finalize" : "upload",
-        "X-Goog-Upload-Offset": String(offset),
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Raw-Size": String(blob.size),
+        "X-Goog-Upload-Content-Type": contentType,
+        "X-Goog-Upload-File-Name": filename,
       },
-      body: blob.slice(offset, end, contentType),
-    }, "resumableUpload");
-    if (!response.ok) {
-      const body = await responseText(response);
-      throw new GooglePhotosBrowserError(buildErrorMessage("Resumable upload", response, body), response.status);
+    },
+    "resumableStart",
+  );
+
+  if (!startResponse.ok) {
+    const body = await responseText(startResponse);
+    throw new GooglePhotosBrowserError(
+      buildErrorMessage("Start resumable upload", startResponse, body),
+      startResponse.status,
+    );
+  }
+
+  const uploadUrl = startResponse.headers.get("X-Goog-Upload-URL");
+  if (!uploadUrl) throw new GooglePhotosBrowserError("Google Photos did not return a resumable upload URL.");
+
+  const granularity = Number(startResponse.headers.get("X-Goog-Upload-Chunk-Granularity") ?? "0");
+  const chunkSize = normalizedChunkSize(granularity);
+  let offset = 0;
+
+  while (offset < blob.size) {
+    const end = Math.min(offset + chunkSize, blob.size);
+    const isFinal = end >= blob.size;
+    let response: Response;
+
+    try {
+      response = await fetch(uploadUrl, {
+        method: "POST",
+        signal: options.signal,
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Goog-Upload-Command": isFinal ? "upload, finalize" : "upload",
+          "X-Goog-Upload-Offset": String(offset),
+        },
+        body: blob.slice(offset, end, contentType),
+      });
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      offset = await queryResumableOffset(uploadUrl, options.signal);
+      options.onProgress?.(offset, blob.size);
+      continue;
     }
+
+    if (!response.ok) {
+      if (isGooglePhotosRetryableStatus(response.status)) {
+        const delayMs = retryDelayMs(0, response);
+        await response.body?.cancel();
+        await sleep(delayMs);
+        offset = await queryResumableOffset(uploadUrl, options.signal);
+        options.onProgress?.(offset, blob.size);
+        continue;
+      }
+      const body = await responseText(response);
+      throw new GooglePhotosBrowserError(
+        buildErrorMessage("Resumable upload", response, body),
+        response.status,
+      );
+    }
+
     offset = end;
     options.onProgress?.(offset, blob.size);
-    logInfo("upload.resumable_progress", { component: "googlePhotos", metadata: { uploadedBytes: offset, totalBytes: blob.size } });
+    logInfo("upload.resumable_progress", {
+      component: "googlePhotos",
+      metadata: { uploadedBytes: offset, totalBytes: blob.size },
+    });
+
     if (isFinal) {
       const token = (await response.text()).trim();
-      if (!token) throw new GooglePhotosBrowserError("Google Photos returned an empty upload token after resumable upload.");
-      logInfo("upload.resumable_finished", { component: "googlePhotos", metadata: { bytes: blob.size, contentType } });
+      if (!token) {
+        throw new GooglePhotosBrowserError(
+          "Google Photos returned an empty upload token after resumable upload.",
+        );
+      }
       return token;
-    } else {
-      await response.body?.cancel();
     }
+
+    await response.body?.cancel();
   }
+
   throw new GooglePhotosBrowserError("Resumable upload finished without an upload token.");
 }
 
@@ -246,53 +309,44 @@ export async function createMediaItems(
   items: Array<{ uploadToken: string; filename: string }>,
 ): Promise<Array<{ uploadToken: string; mediaItemId?: string; productUrl?: string; error?: string }>> {
   if (items.length > 50) {
-    const error = new GooglePhotosBrowserError("Google Photos batchCreate supports at most 50 items per request.");
-    logError("google_photos.batch_create_too_large", error, {
-      component: "googlePhotos",
-      metadata: { itemCount: items.length },
-    });
-    throw error;
+    throw new GooglePhotosBrowserError("Google Photos batchCreate supports at most 50 items per request.");
   }
 
-  logInfo("google_photos.batch_create_started", {
-    component: "googlePhotos",
-    metadata: { itemCount: items.length },
-  });
-
-  const response = await enqueueBatchCreate(() => fetchWithRetry(BATCH_CREATE_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      newMediaItems: items.map((item) => ({
-        simpleMediaItem: {
-          fileName: item.filename,
-          uploadToken: item.uploadToken,
+  const response = await enqueueBatchCreate(() =>
+    fetchWithRetry(
+      BATCH_CREATE_ENDPOINT,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
-      })),
-    }),
-  }, "batchCreate"));
+        body: JSON.stringify({
+          newMediaItems: items.map((item) => ({
+            simpleMediaItem: { fileName: item.filename, uploadToken: item.uploadToken },
+          })),
+        }),
+      },
+      "batchCreate",
+    ),
+  );
 
   const body = await responseText(response);
   if (!response.ok) {
-    const error = new GooglePhotosBrowserError(
+    throw new GooglePhotosBrowserError(
       buildErrorMessage("Create media items", response, body),
       response.status,
     );
-    logError("google_photos.batch_create_failed", error, {
-      component: "googlePhotos",
-      metadata: {
-        status: response.status,
-        itemCount: items.length,
-      },
-    });
-    throw error;
   }
 
-  const parsed = JSON.parse(body || "{}") as BatchCreateResponse;
-  const results = items.map((item, index) => {
+  let parsed: BatchCreateResponse;
+  try {
+    parsed = JSON.parse(body || "{}") as BatchCreateResponse;
+  } catch {
+    throw new GooglePhotosBrowserError("Google Photos returned an invalid batchCreate response.");
+  }
+
+  return items.map((item, index) => {
     const result = parsed.newMediaItemResults?.[index];
     const code = result?.status?.code ?? 0;
     if (code !== 0) {
@@ -307,17 +361,6 @@ export async function createMediaItems(
       productUrl: result?.mediaItem?.productUrl,
     };
   });
-
-  logInfo("google_photos.batch_create_finished", {
-    component: "googlePhotos",
-    metadata: {
-      itemCount: items.length,
-      accepted: results.filter((result) => !result.error).length,
-      rejected: results.filter((result) => Boolean(result.error)).length,
-    },
-  });
-
-  return results;
 }
 
 export async function createMediaItem(
@@ -325,15 +368,7 @@ export async function createMediaItem(
   uploadToken: string,
   filename: string,
 ): Promise<{ mediaItemId?: string; productUrl?: string }> {
-  const [result] = await createMediaItems(accessToken, [
-    { uploadToken, filename },
-  ]);
-  if (result.error) {
-    const error = new GooglePhotosBrowserError(result.error);
-    logError("google_photos.create_media_item_rejected", error, {
-      component: "googlePhotos",
-    });
-    throw error;
-  }
+  const [result] = await createMediaItems(accessToken, [{ uploadToken, filename }]);
+  if (result.error) throw new GooglePhotosBrowserError(result.error);
   return { mediaItemId: result.mediaItemId, productUrl: result.productUrl };
 }

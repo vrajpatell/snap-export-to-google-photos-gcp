@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "cd frontend && npm install",
+  "installCommand": "cd frontend && npm install && (npm audit --json || true)",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]

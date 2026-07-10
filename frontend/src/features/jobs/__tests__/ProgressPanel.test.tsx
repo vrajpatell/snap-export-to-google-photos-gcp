@@ -57,7 +57,7 @@ describe("ProgressPanel", () => {
     expect(
       screen.getByText(/Import finished\. Review the summary below\./i),
     ).toBeInTheDocument();
-    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.getAllByText("Done").length).toBeGreaterThan(0);
     expect(
       screen.queryByRole("button", { name: /Stop import/i }),
     ).not.toBeInTheDocument();

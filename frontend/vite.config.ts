@@ -15,8 +15,8 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ["react", "react-dom"],
+        manualChunks(id) {
+          return id.includes("node_modules/react") ? "react" : undefined;
         },
       },
     },

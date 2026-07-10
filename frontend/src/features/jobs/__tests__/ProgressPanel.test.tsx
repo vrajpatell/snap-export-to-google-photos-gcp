@@ -36,14 +36,15 @@ describe("ProgressPanel", () => {
     // (uploaded + duplicates) / supported = 50 / 100 = 50%.
     expect(progress).toHaveAttribute("aria-valuenow", "50");
 
-    expect(screen.getByText(/Uploaded/)).toBeInTheDocument();
-    expect(screen.getByText(/Failed/)).toBeInTheDocument();
-    expect(screen.getByText(/Duplicates/)).toBeInTheDocument();
-    expect(screen.getByText(/Unsupported/)).toBeInTheDocument();
-    expect(screen.getByText(/Bytes Processed/)).toBeInTheDocument();
+    expect(screen.getByText("Uploaded")).toBeInTheDocument();
+    expect(screen.getByText("Created")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText("Duplicates")).toBeInTheDocument();
+    expect(screen.getByText("Skipped")).toBeInTheDocument();
+    expect(screen.getByText("Moved")).toBeInTheDocument();
   });
 
-  it("tells users to download the local report for terminal jobs", () => {
+  it("shows the terminal summary and removes the stop control", () => {
     render(
       <ProgressPanel
         job={baseJob({ status: "completed" })}
@@ -52,12 +53,17 @@ describe("ProgressPanel", () => {
         onCancelImport={() => {}}
       />,
     );
+
     expect(
-      screen.getByText(/Download the local report/i),
+      screen.getByText(/Import finished\. Review the summary below\./i),
     ).toBeInTheDocument();
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Stop import/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it("renders only the browser cancel control while uploading", () => {
+  it("renders only the browser stop control while uploading", () => {
     render(
       <ProgressPanel
         job={baseJob({ status: "uploading" })}
@@ -67,8 +73,12 @@ describe("ProgressPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /Cancel browser import/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Start import/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Stop import/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Start import/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Pause/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Resume/i })).not.toBeInTheDocument();
   });

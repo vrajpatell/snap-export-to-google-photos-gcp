@@ -76,6 +76,10 @@ uvicorn app.main:app --reload --port 8080
 
 Backend, Docker, and archived GCP documentation are legacy/local references and are not part of the static Vercel deployment.
 
+## Improvement analysis
+
+See [`docs/improvement-analysis.md`](docs/improvement-analysis.md) for a researched improvement roadmap, latest open-source technology candidates, and additional browser/local/cloud storage options that can be added without changing the default free browser-only path.
+
 ## Checks
 
 ```bash

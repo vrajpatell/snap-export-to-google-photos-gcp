@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "installCommand": "cd frontend && npm install",
-  "buildCommand": "cd frontend && npm run build",
+  "installCommand": "cd frontend && rm -rf node_modules && npm install && npm audit --audit-level=moderate",
+  "buildCommand": "cd frontend && npm run test && npm run build",
   "outputDirectory": "frontend/dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

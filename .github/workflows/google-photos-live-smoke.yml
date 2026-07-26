@@ -1,0 +1,29 @@
+name: google-photos-live-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_create_test_item:
+        description: "Type CREATE_TEST_ITEM to upload one 1x1 PNG to Google Photos"
+        required: true
+        type: string
+
+jobs:
+  live-smoke:
+    if: inputs.confirm_create_test_item == 'CREATE_TEST_ITEM'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify secret is configured
+        env:
+          GOOGLE_PHOTOS_ACCESS_TOKEN: ${{ secrets.GOOGLE_PHOTOS_ACCESS_TOKEN }}
+        run: test -n "$GOOGLE_PHOTOS_ACCESS_TOKEN"
+      - name: Upload and create one real Google Photos item
+        working-directory: frontend
+        env:
+          GOOGLE_PHOTOS_ACCESS_TOKEN: ${{ secrets.GOOGLE_PHOTOS_ACCESS_TOKEN }}
+        run: node scripts/google-photos-live-smoke.mjs
